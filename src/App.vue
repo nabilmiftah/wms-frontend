@@ -1,10 +1,21 @@
 <script setup>
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
+import { computed } from 'vue'
 import Sidebar from './components/sidebar/AppSidebar.vue' 
+
+const route = useRoute()
+const isAuthPage = computed(() => {
+  const authPaths = ['/', '/signin', '/signup']
+  return authPaths.includes(route.path)
+})
 </script>
 
 <template>
-  <div class="flex h-screen bg-[#F8F9FB] overflow-hidden">
+  <template v-if="isAuthPage">
+    <RouterView />
+  </template>
+
+  <div v-else class="flex h-screen bg-[#F8F9FB] overflow-hidden">
     <Sidebar />
 
     <div class="flex-1 flex flex-col min-w-0">
