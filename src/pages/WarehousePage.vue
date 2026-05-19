@@ -3,129 +3,121 @@ import { ref } from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
-import BaseButton from "../base/BaseButton.vue";
-import BaseInput from "../base/BaseInput.vue";
-import BaseModal from "../base/BaseModal.vue";
-import MainLayout from "../layouts/MainLayout.vue";
+import BaseButton from "../components/base/BaseButton.vue";
+import BaseInput from "../components/base/BaseInput.vue";
+import BaseModal from "../components/base/BaseModal.vue";
+import MainLayout from "../components/layouts/MainLayout.vue";
 import { computed } from "vue";
-import BaseSelect from "../base/BaseSelect.vue";
 
 const openModal = ref(false);
 const search = ref("");
 
-const supplierNumber = ref("");
-const supplierName = ref("");
-const category = ref("");
-const address = ref("");
-const supplierNameError = ref("");
-const categoryError = ref("");
-const addressError = ref("");
+const warehouseCode = ref("");
+const warehouseName = ref("");
+const city = ref("");
+const description = ref("");
+const warehouseNameError = ref("");
+const cityError = ref("");
+const descriptionError = ref("");
 
 const isEdit = ref(false);
 
 const selectedId = ref<number | null>(null);
 
-const suppliers = ref([
+const warehouses = ref([
   {
     id: 1,
-    number: "SUP_01",
-    name: "PT. Jaya Abadi",
-    category: "Local Supplier",
-    address: "Jakarta, Indonesia",
+    code: "WH_01",
+    name: "Gudang Jogja",
+    city: "Sleman",
+    description: "Gudang barang inti Jogja",
   },
   {
     id: 2,
-    number: "SUP_02",
-    name: "CV. Makmur Sejahtera",
-    category: "Import",
-    address: "Jl. Sudirman No. 20, Bandung",
+    code: "WH_02",
+    name: "Gudang Bandung",
+    city: "Cimahi",
+    description: "Gudang distribusi Jawa Barat",
   },
   {
     id: 3,
-    number: "SUP_03",
-    name: "UD. Sentosa",
-    category: "Local",
-    address: "Jl. Diponegoro No. 30, Surabaya",
+    code: "WH_03",
+    name: "Gudang Jakarta",
+    city: "Cakung",
+    description: "Gudang barang impor",
   },
 ]);
 
-const categories = [
-  {
-    label: "Local",
-    value: "local",
-  },
-  {
-    label: "Import",
-    value: "import",
-  },
-];
-
-const filteredSuppliers = computed(() => {
-  return suppliers.value.filter((supplier) => {
+const filteredWarehouses = computed(() => {
+  return warehouses.value.filter((warehouse) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      supplier.number.toLowerCase().includes(keyword) ||
-      supplier.name.toLowerCase().includes(keyword) ||
-      supplier.category.toLowerCase().includes(keyword) ||
-      supplier.address.toLowerCase().includes(keyword)
+      warehouse.code.toLowerCase().includes(keyword) ||
+      warehouse.name.toLowerCase().includes(keyword) ||
+      warehouse.city.toLowerCase().includes(keyword)
     );
   });
 });
 
-const generateSupplierNumber = () => {
-  const nextNumber = suppliers.value.length + 1;
+const generateWarehouseCode = () => {
+  const nextNumber = warehouses.value.length + 1;
 
-  return `SUP_${String(nextNumber).padStart(2, "0")}`;
+  return `WH_${String(nextNumber).padStart(2, "0")}`;
 };
 
 const openAddModal = () => {
-  supplierNumber.value = generateSupplierNumber();
+  warehouseCode.value = generateWarehouseCode();
 
   openModal.value = true;
 };
 
-const saveSupplier = () => {
-  supplierNameError.value = "";
-  addressError.value = "";
-  categoryError.value = "";
+const saveWarehouse = () => {
+  warehouseNameError.value = "";
+  cityError.value = "";
+  descriptionError.value = "";
 
-  if (!supplierName.value) {
-    supplierNameError.value = "Supplier name wajib diisi";
+  if (!warehouseName.value) {
+    warehouseNameError.value =
+      "Warehouse name wajib diisi";
+
+    return;
+  }
+
+  if (!city.value) {
+    cityError.value =
+      "City wajib diisi";
 
     return;
   }
 
-  if (!address.value) {
-    addressError.value = "Address wajib diisi";
-
-    return;
-  }
-  if (!category.value) {
-    categoryError.value = "Category wajib dipilih";
+  if (!description.value) {
+    descriptionError.value =
+      "Description wajib diisi";
 
     return;
   }
 
   if (isEdit.value) {
-    const index = suppliers.value.findIndex(
-      (supplier) => supplier.id === selectedId.value,
+    const index = warehouses.value.findIndex(
+      (warehouse) =>
+        warehouse.id === selectedId.value
     );
 
-    suppliers.value[index] = {
+    warehouses.value[index] = {
       id: selectedId.value,
-      number: supplierNumber.value,
-      name: supplierName.value,
-      category: category.value,
-      address: address.value,
+      code: warehouseCode.value,
+      name: warehouseName.value,
+      city: city.value,
+      description: description.value,
     };
   } else {
-    suppliers.value.push({
+    warehouses.value.push({
       id: Date.now(),
-      number: supplierNumber.value,
-      name: supplierName.value,
-      category: category.value,
-      address: address.value,
+      code: warehouseCode.value,
+      name: warehouseName.value,
+      city: city.value,
+      description: description.value,
     });
   }
 
@@ -133,10 +125,10 @@ const saveSupplier = () => {
 };
 
 const resetForm = () => {
-  supplierNumber.value = "";
-  supplierName.value = "";
-  category.value = "";
-  address.value = "";
+  warehouseCode.value = "";
+  warehouseName.value = "";
+  city.value = "";
+  description.value = "";
 
   isEdit.value = false;
   selectedId.value = null;
@@ -144,21 +136,23 @@ const resetForm = () => {
   openModal.value = false;
 };
 
-const editSupplier = (supplier: any) => {
+const editWarehouse = (warehouse: any) => {
   isEdit.value = true;
 
-  selectedId.value = supplier.id;
+  selectedId.value = warehouse.id;
 
-  supplierNumber.value = supplier.number;
-  supplierName.value = supplier.name;
-  category.value = supplier.category;
-  address.value = supplier.address;
+  warehouseCode.value = warehouse.code;
+  warehouseName.value = warehouse.name;
+  city.value = warehouse.city;
+  description.value = warehouse.description;
 
   openModal.value = true;
 };
 
-const deleteSupplier = (id: number) => {
-  suppliers.value = suppliers.value.filter((supplier) => supplier.id !== id);
+const deleteWarehouse = (id: number) => {
+  warehouses.value = warehouses.value.filter(
+    (warehouse) => warehouse.id !== id,
+  );
 };
 </script>
 
@@ -167,9 +161,9 @@ const deleteSupplier = (id: number) => {
     <div class="flex min-h-screen bg-[#f5f7fb]">
       <main class="flex-1 p-8 space-y-6 overflow-auto">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Supplier</h1>
+          <h1 class="text-2xl font-bold text-gray-900">Warehouse</h1>
 
-          <p class="text-sm text-gray-500 mt-1">Kelola master data supplier</p>
+          <p class="text-sm text-gray-500 mt-1">Kelola master data warehouse</p>
         </div>
 
         <div
@@ -184,7 +178,7 @@ const deleteSupplier = (id: number) => {
               <BaseInput
                 v-model="search"
                 type="text"
-                placeholder="Search supplier"
+                placeholder="Search warehouse"
                 class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#004AC6]"
               />
             </div>
@@ -192,7 +186,7 @@ const deleteSupplier = (id: number) => {
             <BaseButton color="brand" @click="openAddModal">
               <div class="flex items-center gap-2">
                 <Plus class="w-4 h-4" />
-                Add Supplier
+                Add Warehouse
               </div>
             </BaseButton>
           </div>
@@ -202,16 +196,16 @@ const deleteSupplier = (id: number) => {
               <thead class="bg-gray-100 text-gray-700">
                 <tr>
                   <th class="text-left px-4 py-3 font-semibold">
-                    Supplier Number
+                    Warehouse Code
                   </th>
 
                   <th class="text-left px-4 py-3 font-semibold">
-                    Supplier Name
+                    Warehouse Name
                   </th>
 
-                  <th class="text-left px-4 py-3 font-semibold">Category</th>
+                  <th class="text-left px-4 py-3 font-semibold">Location</th>
 
-                  <th class="text-left px-4 py-3 font-semibold">Address</th>
+                  <th class="text-left px-4 py-3 font-semibold">Description</th>
 
                   <th class="text-center px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -219,38 +213,38 @@ const deleteSupplier = (id: number) => {
 
               <tbody>
                 <tr
-                  v-for="supplier in filteredSuppliers"
-                  :key="supplier.id"
+                  v-for="warehouse in filteredWarehouses"
+                  :key="warehouse.id"
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ supplier.number }}
+                    {{ warehouse.code }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ supplier.name }}
+                    {{ warehouse.name }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ supplier.category }}
+                    {{ warehouse.city }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ supplier.address }}
+                    {{ warehouse.description }}
                   </td>
 
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-center gap-2">
                       <button
                         class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition"
-                        @click="editSupplier(supplier)"
+                        @click="editWarehouse(warehouse)"
                       >
                         <Pencil class="w-4 h-4" />
                       </button>
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteSupplier(supplier.id)"
+                        @click="deleteWarehouse(warehouse.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -265,19 +259,19 @@ const deleteSupplier = (id: number) => {
 
       <BaseModal
         :open="openModal"
-        title="Add Supplier"
+        title="Add Warehouse"
         @close="openModal = false"
       >
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Supplier Number
+              Warehouse Code
             </label>
 
             <BaseInput
               class="block mb-2"
-              v-model="supplierNumber"
-              placeholder="Supplier Number"
+              v-model="warehouseCode"
+              placeholder="Warehouse Code"
               disabled
             />
             <label class="text-xs font-medium text-[#434655] block mb-2 italic">
@@ -287,40 +281,39 @@ const deleteSupplier = (id: number) => {
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Supplier Name
+              Warehouse Name
             </label>
 
-            <BaseInput v-model="supplierName" placeholder="Supplier Name" />
+            <BaseInput v-model="warehouseName" placeholder="Warehouse Name" />
 
-            <p v-if="supplierNameError" class="text-red-500 text-xs mt-1">
-              {{ supplierNameError }}
+            <p v-if="warehouseNameError" class="text-red-500 text-xs mt-1">
+              {{ warehouseNameError }}
             </p>
           </div>
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Address
+              City
             </label>
 
-            <BaseInput v-model="address" placeholder="Supplier Address" />
-            <p v-if="addressError" class="text-red-500 text-xs mt-1">
-              {{ addressError }}
+            <BaseInput v-model="city" placeholder="City or Region" />
+            <p v-if="cityError" class="text-red-500 text-xs mt-1">
+              {{ cityError }}
             </p>
           </div>
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Category
+              Description
             </label>
 
-            <BaseSelect
-              v-model="category"
-              :items="categories"
-              placeholder="Select Category"
+            <BaseInput
+              v-model="description"
+              :textarea="true"
+              placeholder="Provide additional details about this facility..."
             />
-
-            <p v-if="categoryError" class="text-red-500 text-xs mt-1">
-              {{ categoryError }}
+            <p v-if="descriptionError" class="text-red-500 text-xs mt-1">
+              {{ descriptionError }}
             </p>
           </div>
 
@@ -329,7 +322,7 @@ const deleteSupplier = (id: number) => {
               Cancel
             </UButton>
 
-            <BaseButton color="brand" @click="saveSupplier">
+            <BaseButton color="brand" @click="saveWarehouse">
               {{ isEdit ? "Update" : "Save" }}
             </BaseButton>
           </div>

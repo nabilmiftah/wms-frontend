@@ -12,7 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppSidebar: typeof import('./src/components/sidebar/AppSidebar.vue')['default']
-    AssetPage: typeof import('./src/components/pages/AssetPage.vue')['default']
+    AssetPage: typeof import('./src/pages/AssetPage.vue')['default']
     AssetsPage: typeof import('./src/components/pages/AssetsPage.vue')['default']
     BaseButton: typeof import('./src/components/base/BaseButton.vue')['default']
     BaseInput: typeof import('./src/components/base/BaseInput.vue')['default']
@@ -25,8 +25,8 @@ declare module 'vue' {
     MainLayout: typeof import('./src/components/layouts/MainLayout.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    StorageBinPage: typeof import('./src/components/pages/StorageBinPage.vue')['default']
-    SupplierPage: typeof import('./src/components/pages/SupplierPage.vue')['default']
+    StorageBinPage: typeof import('./src/pages/StorageBinPage.vue')['default']
+    SupplierPage: typeof import('./src/pages/SupplierPage.vue')['default']
     UButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UCard: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
     UDropdownMenu: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/DropdownMenu.vue')['default']
@@ -34,10 +34,10 @@ declare module 'vue' {
     UModal: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Modal.vue')['default']
     UNavigationMenu: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/NavigationMenu.vue')['default']
     USelect: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Select.vue')['default']
-    UserPage: typeof import('./src/components/pages/UserPage.vue')['default']
+    UserPage: typeof import('./src/pages/UserPage.vue')['default']
     USidebar: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Sidebar.vue')['default']
     UTable: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Table.vue')['default']
     UTextarea: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Textarea.vue')['default']
-    WarehousePage: typeof import('./src/components/pages/WarehousePage.vue')['default']
+    WarehousePage: typeof import('./src/pages/WarehousePage.vue')['default']
   }
 }
