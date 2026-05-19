@@ -1,10 +1,19 @@
 <script setup>
-import AuthLayout from './AuthLayout.vue';
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import AuthLayout from './AuthLayout.vue';
+
+const router = useRouter();
 
 const email = ref('');
 const password = ref('');
 const showPassword = ref(false);
+
+const handleLogin = () => {
+  console.log('Tombol login berhasil diklik');
+  
+  router.push('/dashboard');
+};
 </script>
 
 <template>
@@ -15,18 +24,18 @@ const showPassword = ref(false);
     <form @submit.prevent class="space-y-5">
       <div>
         <label class="block text-xs font-bold text-slate-800 mb-2">Email</label>
-        <input v-model="email" type="email" placeholder="your@email.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" />
+        <input v-model="email" type="email" placeholder="your@email.com" class="w-full px-4 py-3 text-black rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" />
       </div>
       
       <div class="relative">
         <label class="block text-xs font-bold text-slate-800 mb-2">Password</label>
-        <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="********" class="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none" />
+        <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="********" class="w-full px-4 py-3 rounded-xl text-black border border-slate-200 outline-none" />
         <button @click="showPassword = !showPassword" class="absolute right-4 top-10 text-slate-400">
           <i :class="showPassword ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
         </button>
       </div>
 
-      <button class="w-full bg-[#0052CC] text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100">Login</button>
+      <button type="button" @click.prevent="handleLogin" class="w-full bg-[#0052CC] text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100">Login</button>
       
       <div class="flex items-center my-6 text-blue-600 text-xs font-bold italic">
         <hr class="flex-grow border-slate-100" /> <span class="px-4 uppercase">Or</span> <hr class="flex-grow border-slate-100" />
