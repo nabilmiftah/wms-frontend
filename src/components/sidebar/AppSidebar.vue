@@ -43,12 +43,20 @@ const toggleSidebar = () => {
         border-white/10
       "
     >
-      <h1
-        v-if="!isCollapsed"
-        class="text-lg font-bold"
-      >
-        Logistics Core
-      </h1>
+      <div class="flex items-center gap-3">
+        <img
+          src="/logo-wms.png"
+          alt="Logo logistic core"
+          class="w-10 h-10 object-contain"
+        />
+
+        <h1
+          v-if="!isCollapsed"
+          class="text-lg font-bold"
+        >
+          Logistics Core
+        </h1>
+      </div>
 
       <button
         @click="toggleSidebar"

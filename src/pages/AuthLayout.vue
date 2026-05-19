@@ -1,14 +1,18 @@
 <template>
-  <div class="flex min-h-screen bg-white font-inter">
-    <div class="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16">
-      <div class="w-full max-w-md border border-blue-100 rounded-[40px] p-10 shadow-sm">
+  <div class="flex min-h-screen bg-white font-inter w-full">
+    <div class="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-16">
+      
+      <div class="w-full max-w-md p-6 sm:p-8 lg:p-10 bg-white lg:border lg:border-blue-300 lg:rounded-[40px] lg:shadow-sm">
+        
         <div class="flex items-center gap-2 mb-8">
           <img src="/logo-wms.png" alt="Logo" class="w-10" />
           <h2 class="text-xl font-bold text-[#001D4A] tracking-tight">
             LOGISTICS <span class="text-blue-600">CORE</span>
           </h2>
         </div>
+
         <slot></slot>
+        
       </div>
     </div>
 
