@@ -1,27 +1,36 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import WarehousePage from '../components/pages/WarehousePage.vue'
-import SupplierPage from '../components/pages/SupplierPage.vue'
-import UserPage from '../components/pages/UserPage.vue'
+import { createRouter, createWebHistory } from "vue-router";
+import WarehousePage from "../components/pages/WarehousePage.vue";
+import SupplierPage from "../components/pages/SupplierPage.vue";
+import UserPage from "../components/pages/UserPage.vue";
+import AssetPage from "../components/pages/AssetPage.vue";
+import StorageBinPage from "../components/pages/StorageBinPage.vue";
 
 const routes = [
   {
-    path: '/warehouse',
+    path: "/warehouse",
     component: WarehousePage,
   },
   {
-    path: '/supplier',
+    path: "/supplier",
     component: SupplierPage,
-  },  
+  },
   {
-    path: '/user',
+    path: "/user",
     component: UserPage,
   },
-
-]
+  {
+    path: "/asset",
+    component: AssetPage,
+  },
+  {
+    path: "/storageBin",
+    component: StorageBinPage,
+  },
+];
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
-})
+  routes,
+});
 
-export default router
+export default router;

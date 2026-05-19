@@ -11,12 +11,15 @@ import { computed } from "vue";
 
 const openModal = ref(false);
 const search = ref("");
-const emailError = ref('')
-const phoneError = ref('')
+
 const userNumber = ref("");
 const userName = ref("");
 const email = ref("");
 const telephone = ref("");
+
+const userNameError = ref('')
+const emailError = ref('')
+const phoneError = ref('')
 
 const isEdit = ref(false);
 
@@ -73,9 +76,54 @@ const openAddModal = () => {
 };
 
 const saveUser = () => {
+  userNameError.value = ""
+  emailError.value = ""
+  phoneError.value = ""
+
+  if (!userName.value) {
+    userNameError.value =
+      "User name wajib diisi"
+
+    return
+  }
+
+  if (!email.value) {
+    emailError.value =
+      "Email wajib diisi"
+
+    return
+  }
+
+  const emailRegex =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (!emailRegex.test(email.value)) {
+    emailError.value =
+      "Email tidak valid"
+
+    return
+  }
+
+  if (!telephone.value) {
+    phoneError.value =
+      "Nomor telepon wajib diisi"
+
+    return
+  }
+
+  const phoneRegex = /^[0-9]+$/
+
+  if (!phoneRegex.test(telephone.value)) {
+    phoneError.value =
+      "Nomor telepon hanya boleh angka"
+
+    return
+  }
+
   if (isEdit.value) {
     const index = users.value.findIndex(
-      (user) => user.id === selectedId.value,
+      (user) =>
+        user.id === selectedId.value,
     );
 
     users.value[index] = {
@@ -97,28 +145,6 @@ const saveUser = () => {
 
   resetForm();
 };
-
-const validateEmail = () => {
-  const emailRegex =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  if (!emailRegex.test(email.value)) {
-    emailError.value = 'Email tidak valid'
-  } else {
-    emailError.value = ''
-  }
-}
-
-const validatePhone = () => {
-  const phoneRegex = /^[0-9]+$/
-
-  if (!phoneRegex.test(telephone.value)) {
-    phoneError.value =
-      'Nomor telepon hanya boleh angka'
-  } else {
-    phoneError.value = ''
-  }
-}
 
 const resetForm = () => {
   userNumber.value = "";
@@ -279,6 +305,9 @@ const deleteUser = (id: number) => {
             </label>
 
             <BaseInput v-model="userName" placeholder="User Name" />
+            <p class="text-red-500 text-xs mt-1" v-if="userNameError">
+              {{ userNameError }}
+            </p>
           </div>
 
           <div>
@@ -286,7 +315,7 @@ const deleteUser = (id: number) => {
               Email
             </label>
 
-            <BaseInput v-model="email" type="email" placeholder="User Email"   @input="validateEmail" />
+            <BaseInput v-model="email" type="email" placeholder="User Email"  " />
             <p class="text-red-500 text-xs mt-1" v-if="emailError">
               {{ emailError }}
             </p>
@@ -297,7 +326,7 @@ const deleteUser = (id: number) => {
               Telephone Number
             </label>
 
-            <BaseInput v-model="telephone" type="tel" placeholder="08xxxxxxx" @input="validatePhone" />
+            <BaseInput v-model="telephone" type="tel" placeholder="08xxxxxxx" " />
             <p class="text-red-500 text-xs mt-1" v-if="phoneError">
               {{ phoneError }}
             </p>
