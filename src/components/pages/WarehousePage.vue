@@ -7,15 +7,18 @@ import BaseButton from "../base/BaseButton.vue";
 import BaseInput from "../base/BaseInput.vue";
 import BaseModal from "../base/BaseModal.vue";
 import MainLayout from "../layouts/MainLayout.vue";
-import { computed } from 'vue'
+import { computed } from "vue";
 
 const openModal = ref(false);
-const search = ref('')
+const search = ref("");
 
 const warehouseCode = ref("");
 const warehouseName = ref("");
 const city = ref("");
 const description = ref("");
+const warehouseNameError = ref("");
+const cityError = ref("");
+const descriptionError = ref("");
 
 const isEdit = ref(false);
 
@@ -46,16 +49,16 @@ const warehouses = ref([
 ]);
 
 const filteredWarehouses = computed(() => {
-  return warehouses.value.filter(warehouse => {
-    const keyword = search.value.toLowerCase()
+  return warehouses.value.filter((warehouse) => {
+    const keyword = search.value.toLowerCase();
 
     return (
       warehouse.code.toLowerCase().includes(keyword) ||
       warehouse.name.toLowerCase().includes(keyword) ||
       warehouse.city.toLowerCase().includes(keyword)
-    )
-  })
-})
+    );
+  });
+});
 
 const generateWarehouseCode = () => {
   const nextNumber = warehouses.value.length + 1;
@@ -70,9 +73,35 @@ const openAddModal = () => {
 };
 
 const saveWarehouse = () => {
+  warehouseNameError.value = "";
+  cityError.value = "";
+  descriptionError.value = "";
+
+  if (!warehouseName.value) {
+    warehouseNameError.value =
+      "Warehouse name wajib diisi";
+
+    return;
+  }
+
+  if (!city.value) {
+    cityError.value =
+      "City wajib diisi";
+
+    return;
+  }
+
+  if (!description.value) {
+    descriptionError.value =
+      "Description wajib diisi";
+
+    return;
+  }
+
   if (isEdit.value) {
     const index = warehouses.value.findIndex(
-      (warehouse) => warehouse.id === selectedId.value,
+      (warehouse) =>
+        warehouse.id === selectedId.value
     );
 
     warehouses.value[index] = {
@@ -255,10 +284,11 @@ const deleteWarehouse = (id: number) => {
               Warehouse Name
             </label>
 
-            <BaseInput
-              v-model="warehouseName"
-              placeholder="Gudang Central Jakarta"
-            />
+            <BaseInput v-model="warehouseName" placeholder="Warehouse Name" />
+
+            <p v-if="warehouseNameError" class="text-red-500 text-xs mt-1">
+              {{ warehouseNameError }}
+            </p>
           </div>
 
           <div>
@@ -267,6 +297,9 @@ const deleteWarehouse = (id: number) => {
             </label>
 
             <BaseInput v-model="city" placeholder="City or Region" />
+            <p v-if="cityError" class="text-red-500 text-xs mt-1">
+              {{ cityError }}
+            </p>
           </div>
 
           <div>
@@ -279,6 +312,9 @@ const deleteWarehouse = (id: number) => {
               :textarea="true"
               placeholder="Provide additional details about this facility..."
             />
+            <p v-if="descriptionError" class="text-red-500 text-xs mt-1">
+              {{ descriptionError }}
+            </p>
           </div>
 
           <div class="flex justify-end gap-3 pt-2">

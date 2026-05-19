@@ -17,6 +17,9 @@ const supplierNumber = ref("");
 const supplierName = ref("");
 const category = ref("");
 const address = ref("");
+const supplierNameError = ref("");
+const categoryError = ref("");
+const addressError = ref("");
 
 const isEdit = ref(false);
 
@@ -48,14 +51,14 @@ const suppliers = ref([
 
 const categories = [
   {
-    label: 'Local',
-    value: 'local'
+    label: "Local",
+    value: "local",
   },
   {
-    label: 'Import',
-    value: 'import'
-  }
-]
+    label: "Import",
+    value: "import",
+  },
+];
 
 const filteredSuppliers = computed(() => {
   return suppliers.value.filter((supplier) => {
@@ -83,6 +86,27 @@ const openAddModal = () => {
 };
 
 const saveSupplier = () => {
+  supplierNameError.value = "";
+  addressError.value = "";
+  categoryError.value = "";
+
+  if (!supplierName.value) {
+    supplierNameError.value = "Supplier name wajib diisi";
+
+    return;
+  }
+
+  if (!address.value) {
+    addressError.value = "Address wajib diisi";
+
+    return;
+  }
+  if (!category.value) {
+    categoryError.value = "Category wajib dipilih";
+
+    return;
+  }
+
   if (isEdit.value) {
     const index = suppliers.value.findIndex(
       (supplier) => supplier.id === selectedId.value,
@@ -267,6 +291,10 @@ const deleteSupplier = (id: number) => {
             </label>
 
             <BaseInput v-model="supplierName" placeholder="Supplier Name" />
+
+            <p v-if="supplierNameError" class="text-red-500 text-xs mt-1">
+              {{ supplierNameError }}
+            </p>
           </div>
 
           <div>
@@ -275,6 +303,9 @@ const deleteSupplier = (id: number) => {
             </label>
 
             <BaseInput v-model="address" placeholder="Supplier Address" />
+            <p v-if="addressError" class="text-red-500 text-xs mt-1">
+              {{ addressError }}
+            </p>
           </div>
 
           <div>
@@ -282,7 +313,15 @@ const deleteSupplier = (id: number) => {
               Category
             </label>
 
-            <BaseSelect v-model="category" :items="categories" placeholder="Supplier Category" />
+            <BaseSelect
+              v-model="category"
+              :items="categories"
+              placeholder="Select Category"
+            />
+
+            <p v-if="categoryError" class="text-red-500 text-xs mt-1">
+              {{ categoryError }}
+            </p>
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
