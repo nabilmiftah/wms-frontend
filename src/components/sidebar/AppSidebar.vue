@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from "vue";
+
 import {
   LayoutDashboard,
   Warehouse,
@@ -6,62 +8,180 @@ import {
   Truck,
   Users,
   Factory,
+  Menu,
 } from "lucide-vue-next";
+
+const isCollapsed = ref(false);
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+};
 </script>
 
 <template>
-  <aside class="w-64 bg-[#001233] text-white flex flex-col">
-    <div class="h-16 flex items-center px-6 border-b border-white/10">
-      <h1 class="text-lg font-bold">Logistics Core</h1>
+  <aside
+    :class="
+      isCollapsed ? 'w-20' : 'w-64'
+    "
+    class="
+      bg-[#001233]
+      text-white
+      flex
+      flex-col
+      transition-all
+      duration-300
+    "
+  >
+    <div
+      class="
+        h-16
+        flex
+        items-center
+        justify-between
+        px-4
+        border-b
+        border-white/10
+      "
+    >
+      <h1
+        v-if="!isCollapsed"
+        class="text-lg font-bold"
+      >
+        Logistics Core
+      </h1>
+
+      <button
+        @click="toggleSidebar"
+        class="
+          p-2
+          rounded-lg
+          hover:bg-white/10
+          transition
+        "
+      >
+        <Menu class="w-5 h-5" />
+      </button>
     </div>
 
     <nav class="flex-1 p-4 space-y-2">
       <RouterLink
-        to="/"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        to="/dashboard"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <LayoutDashboard class="w-5 h-5" />
-        Dashboard
+        <LayoutDashboard class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          Dashboard
+        </span>
       </RouterLink>
 
       <RouterLink
         to="/warehouse"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <Warehouse class="w-5 h-5" />
-        Warehouse
+        <Warehouse class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          Warehouse
+        </span>
       </RouterLink>
 
       <RouterLink
         to="/storageBin"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <Package class="w-5 h-5" />
-        Storage Bin
+        <Package class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          Storage Bin
+        </span>
       </RouterLink>
-      
+
       <RouterLink
         to="/asset"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <Factory class="w-5 h-5" />
-        Asset
+        <Factory class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          Asset
+        </span>
       </RouterLink>
 
       <RouterLink
         to="/supplier"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <Truck class="w-5 h-5" />
-        Supplier
+        <Truck class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          Supplier
+        </span>
       </RouterLink>
 
       <RouterLink
         to="/user"
-        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition"
+        class="
+          flex
+          items-center
+          gap-3
+          px-4
+          py-3
+          rounded-xl
+          hover:bg-white/10
+          transition
+        "
       >
-        <Users class="w-5 h-5" />
-        User
+        <Users class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed">
+          User
+        </span>
       </RouterLink>
     </nav>
   </aside>

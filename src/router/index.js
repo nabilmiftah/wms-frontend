@@ -1,31 +1,33 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import WelcomePage from '../pages/WelcomePage.vue'
-import SignInPage from '../pages/SignInPage.vue'
-import SignUpPage from '../pages/SignUpPage.vue'
-import DashboardPage from '../pages/Dashboard.vue'
-import WarehousePage from '../components/pages/WarehousePage.vue'
-import SupplierPage from '../components/pages/SupplierPage.vue'
-import UserPage from '../components/pages/UserPage.vue'
+import { createRouter, createWebHistory } from "vue-router";
+import WelcomePage from "../pages/WelcomePage.vue";
+import SignInPage from "../pages/SignInPage.vue";
+import SignUpPage from "../pages/SignUpPage.vue";
+import DashboardPage from "../pages/DashboardPage.vue";
+import WarehousePage from "../pages/WarehousePage.vue";
+import SupplierPage from "../pages/SupplierPage.vue";
+import UserPage from "../pages/UserPage.vue";
+import AssetPage from "../pages/AssetPage.vue";
+import StorageBinPage from "../pages/StorageBinPage.vue";
 
 const routes = [
   {
-    path: '/',
+    path: "/",
     component: WelcomePage,
   },
   {
-    path: '/signin',
+    path: "/signin",
     component: SignInPage,
   },
   {
-    path: '/signup',
+    path: "/signup",
     component: SignUpPage,
   },
   {
-    path: '/dashboard',
+    path: "/dashboard",
     component: DashboardPage,
   },
   {
-    path: '/warehouse',
+    path: "/warehouse",
     component: WarehousePage,
   },
   {

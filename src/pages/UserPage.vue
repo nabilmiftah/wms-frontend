@@ -3,10 +3,10 @@ import { ref } from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
-import BaseButton from "../base/BaseButton.vue";
-import BaseInput from "../base/BaseInput.vue";
-import BaseModal from "../base/BaseModal.vue";
-import MainLayout from "../layouts/MainLayout.vue";
+import BaseButton from "../components/base/BaseButton.vue";
+import BaseInput from "../components/base/BaseInput.vue";
+import BaseModal from "../components/base/BaseModal.vue";
+import MainLayout from "../components/layouts/MainLayout.vue";
 import { computed } from "vue";
 
 const openModal = ref(false);

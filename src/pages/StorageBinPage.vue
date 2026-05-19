@@ -3,12 +3,12 @@ import { ref } from "vue";
 
 import { Pencil, Trash2, Search, Plus, Warehouse } from "lucide-vue-next";
 
-import BaseButton from "../base/BaseButton.vue";
-import BaseInput from "../base/BaseInput.vue";
-import BaseModal from "../base/BaseModal.vue";
-import MainLayout from "../layouts/MainLayout.vue";
+import BaseButton from "../components/base/BaseButton.vue";
+import BaseInput from "../components/base/BaseInput.vue";
+import BaseModal from "../components/base/BaseModal.vue";
+import MainLayout from "../components/layouts/MainLayout.vue";
 import { computed } from "vue";
-import BaseSelect from "../base/BaseSelect.vue";
+import BaseSelect from "../components/base/BaseSelect.vue";
 import { watch } from "vue";
 
 const openModal = ref(false);

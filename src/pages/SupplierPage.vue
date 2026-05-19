@@ -3,121 +3,129 @@ import { ref } from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
-import BaseButton from "../base/BaseButton.vue";
-import BaseInput from "../base/BaseInput.vue";
-import BaseModal from "../base/BaseModal.vue";
-import MainLayout from "../layouts/MainLayout.vue";
+import BaseButton from "../components/base/BaseButton.vue";
+import BaseInput from "../components/base/BaseInput.vue";
+import BaseModal from "../components/base/BaseModal.vue";
+import MainLayout from "../components/layouts/MainLayout.vue";
 import { computed } from "vue";
+import BaseSelect from "../components/base/BaseSelect.vue";
 
 const openModal = ref(false);
 const search = ref("");
 
-const warehouseCode = ref("");
-const warehouseName = ref("");
-const city = ref("");
-const description = ref("");
-const warehouseNameError = ref("");
-const cityError = ref("");
-const descriptionError = ref("");
+const supplierNumber = ref("");
+const supplierName = ref("");
+const category = ref("");
+const address = ref("");
+const supplierNameError = ref("");
+const categoryError = ref("");
+const addressError = ref("");
 
 const isEdit = ref(false);
 
 const selectedId = ref<number | null>(null);
 
-const warehouses = ref([
+const suppliers = ref([
   {
     id: 1,
-    code: "WH_01",
-    name: "Gudang Jogja",
-    city: "Sleman",
-    description: "Gudang barang inti Jogja",
+    number: "SUP_01",
+    name: "PT. Jaya Abadi",
+    category: "Local Supplier",
+    address: "Jakarta, Indonesia",
   },
   {
     id: 2,
-    code: "WH_02",
-    name: "Gudang Bandung",
-    city: "Cimahi",
-    description: "Gudang distribusi Jawa Barat",
+    number: "SUP_02",
+    name: "CV. Makmur Sejahtera",
+    category: "Import",
+    address: "Jl. Sudirman No. 20, Bandung",
   },
   {
     id: 3,
-    code: "WH_03",
-    name: "Gudang Jakarta",
-    city: "Cakung",
-    description: "Gudang barang impor",
+    number: "SUP_03",
+    name: "UD. Sentosa",
+    category: "Local",
+    address: "Jl. Diponegoro No. 30, Surabaya",
   },
 ]);
 
-const filteredWarehouses = computed(() => {
-  return warehouses.value.filter((warehouse) => {
+const categories = [
+  {
+    label: "Local",
+    value: "local",
+  },
+  {
+    label: "Import",
+    value: "import",
+  },
+];
+
+const filteredSuppliers = computed(() => {
+  return suppliers.value.filter((supplier) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      warehouse.code.toLowerCase().includes(keyword) ||
-      warehouse.name.toLowerCase().includes(keyword) ||
-      warehouse.city.toLowerCase().includes(keyword)
+      supplier.number.toLowerCase().includes(keyword) ||
+      supplier.name.toLowerCase().includes(keyword) ||
+      supplier.category.toLowerCase().includes(keyword) ||
+      supplier.address.toLowerCase().includes(keyword)
     );
   });
 });
 
-const generateWarehouseCode = () => {
-  const nextNumber = warehouses.value.length + 1;
+const generateSupplierNumber = () => {
+  const nextNumber = suppliers.value.length + 1;
 
-  return `WH_${String(nextNumber).padStart(2, "0")}`;
+  return `SUP_${String(nextNumber).padStart(2, "0")}`;
 };
 
 const openAddModal = () => {
-  warehouseCode.value = generateWarehouseCode();
+  supplierNumber.value = generateSupplierNumber();
 
   openModal.value = true;
 };
 
-const saveWarehouse = () => {
-  warehouseNameError.value = "";
-  cityError.value = "";
-  descriptionError.value = "";
+const saveSupplier = () => {
+  supplierNameError.value = "";
+  addressError.value = "";
+  categoryError.value = "";
 
-  if (!warehouseName.value) {
-    warehouseNameError.value =
-      "Warehouse name wajib diisi";
-
-    return;
-  }
-
-  if (!city.value) {
-    cityError.value =
-      "City wajib diisi";
+  if (!supplierName.value) {
+    supplierNameError.value = "Supplier name wajib diisi";
 
     return;
   }
 
-  if (!description.value) {
-    descriptionError.value =
-      "Description wajib diisi";
+  if (!address.value) {
+    addressError.value = "Address wajib diisi";
+
+    return;
+  }
+  if (!category.value) {
+    categoryError.value = "Category wajib dipilih";
 
     return;
   }
 
   if (isEdit.value) {
-    const index = warehouses.value.findIndex(
-      (warehouse) =>
-        warehouse.id === selectedId.value
+    const index = suppliers.value.findIndex(
+      (supplier) => supplier.id === selectedId.value,
     );
 
-    warehouses.value[index] = {
+    suppliers.value[index] = {
       id: selectedId.value,
-      code: warehouseCode.value,
-      name: warehouseName.value,
-      city: city.value,
-      description: description.value,
+      number: supplierNumber.value,
+      name: supplierName.value,
+      category: category.value,
+      address: address.value,
     };
   } else {
-    warehouses.value.push({
+    suppliers.value.push({
       id: Date.now(),
-      code: warehouseCode.value,
-      name: warehouseName.value,
-      city: city.value,
-      description: description.value,
+      number: supplierNumber.value,
+      name: supplierName.value,
+      category: category.value,
+      address: address.value,
     });
   }
 
@@ -125,10 +133,10 @@ const saveWarehouse = () => {
 };
 
 const resetForm = () => {
-  warehouseCode.value = "";
-  warehouseName.value = "";
-  city.value = "";
-  description.value = "";
+  supplierNumber.value = "";
+  supplierName.value = "";
+  category.value = "";
+  address.value = "";
 
   isEdit.value = false;
   selectedId.value = null;
@@ -136,23 +144,21 @@ const resetForm = () => {
   openModal.value = false;
 };
 
-const editWarehouse = (warehouse: any) => {
+const editSupplier = (supplier: any) => {
   isEdit.value = true;
 
-  selectedId.value = warehouse.id;
+  selectedId.value = supplier.id;
 
-  warehouseCode.value = warehouse.code;
-  warehouseName.value = warehouse.name;
-  city.value = warehouse.city;
-  description.value = warehouse.description;
+  supplierNumber.value = supplier.number;
+  supplierName.value = supplier.name;
+  category.value = supplier.category;
+  address.value = supplier.address;
 
   openModal.value = true;
 };
 
-const deleteWarehouse = (id: number) => {
-  warehouses.value = warehouses.value.filter(
-    (warehouse) => warehouse.id !== id,
-  );
+const deleteSupplier = (id: number) => {
+  suppliers.value = suppliers.value.filter((supplier) => supplier.id !== id);
 };
 </script>
 
@@ -161,9 +167,9 @@ const deleteWarehouse = (id: number) => {
     <div class="flex min-h-screen bg-[#f5f7fb]">
       <main class="flex-1 p-8 space-y-6 overflow-auto">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Warehouse</h1>
+          <h1 class="text-2xl font-bold text-gray-900">Supplier</h1>
 
-          <p class="text-sm text-gray-500 mt-1">Kelola master data warehouse</p>
+          <p class="text-sm text-gray-500 mt-1">Kelola master data supplier</p>
         </div>
 
         <div
@@ -178,7 +184,7 @@ const deleteWarehouse = (id: number) => {
               <BaseInput
                 v-model="search"
                 type="text"
-                placeholder="Search warehouse"
+                placeholder="Search supplier"
                 class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#004AC6]"
               />
             </div>
@@ -186,7 +192,7 @@ const deleteWarehouse = (id: number) => {
             <BaseButton color="brand" @click="openAddModal">
               <div class="flex items-center gap-2">
                 <Plus class="w-4 h-4" />
-                Add Warehouse
+                Add Supplier
               </div>
             </BaseButton>
           </div>
@@ -196,16 +202,16 @@ const deleteWarehouse = (id: number) => {
               <thead class="bg-gray-100 text-gray-700">
                 <tr>
                   <th class="text-left px-4 py-3 font-semibold">
-                    Warehouse Code
+                    Supplier Number
                   </th>
 
                   <th class="text-left px-4 py-3 font-semibold">
-                    Warehouse Name
+                    Supplier Name
                   </th>
 
-                  <th class="text-left px-4 py-3 font-semibold">Location</th>
+                  <th class="text-left px-4 py-3 font-semibold">Category</th>
 
-                  <th class="text-left px-4 py-3 font-semibold">Description</th>
+                  <th class="text-left px-4 py-3 font-semibold">Address</th>
 
                   <th class="text-center px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -213,38 +219,38 @@ const deleteWarehouse = (id: number) => {
 
               <tbody>
                 <tr
-                  v-for="warehouse in filteredWarehouses"
-                  :key="warehouse.id"
+                  v-for="supplier in filteredSuppliers"
+                  :key="supplier.id"
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.code }}
+                    {{ supplier.number }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ warehouse.name }}
+                    {{ supplier.name }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.city }}
+                    {{ supplier.category }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.description }}
+                    {{ supplier.address }}
                   </td>
 
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-center gap-2">
                       <button
                         class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition"
-                        @click="editWarehouse(warehouse)"
+                        @click="editSupplier(supplier)"
                       >
                         <Pencil class="w-4 h-4" />
                       </button>
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteWarehouse(warehouse.id)"
+                        @click="deleteSupplier(supplier.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -259,19 +265,19 @@ const deleteWarehouse = (id: number) => {
 
       <BaseModal
         :open="openModal"
-        title="Add Warehouse"
+        title="Add Supplier"
         @close="openModal = false"
       >
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Warehouse Code
+              Supplier Number
             </label>
 
             <BaseInput
               class="block mb-2"
-              v-model="warehouseCode"
-              placeholder="Warehouse Code"
+              v-model="supplierNumber"
+              placeholder="Supplier Number"
               disabled
             />
             <label class="text-xs font-medium text-[#434655] block mb-2 italic">
@@ -281,39 +287,40 @@ const deleteWarehouse = (id: number) => {
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Warehouse Name
+              Supplier Name
             </label>
 
-            <BaseInput v-model="warehouseName" placeholder="Warehouse Name" />
+            <BaseInput v-model="supplierName" placeholder="Supplier Name" />
 
-            <p v-if="warehouseNameError" class="text-red-500 text-xs mt-1">
-              {{ warehouseNameError }}
+            <p v-if="supplierNameError" class="text-red-500 text-xs mt-1">
+              {{ supplierNameError }}
             </p>
           </div>
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              City
+              Address
             </label>
 
-            <BaseInput v-model="city" placeholder="City or Region" />
-            <p v-if="cityError" class="text-red-500 text-xs mt-1">
-              {{ cityError }}
+            <BaseInput v-model="address" placeholder="Supplier Address" />
+            <p v-if="addressError" class="text-red-500 text-xs mt-1">
+              {{ addressError }}
             </p>
           </div>
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Description
+              Category
             </label>
 
-            <BaseInput
-              v-model="description"
-              :textarea="true"
-              placeholder="Provide additional details about this facility..."
+            <BaseSelect
+              v-model="category"
+              :items="categories"
+              placeholder="Select Category"
             />
-            <p v-if="descriptionError" class="text-red-500 text-xs mt-1">
-              {{ descriptionError }}
+
+            <p v-if="categoryError" class="text-red-500 text-xs mt-1">
+              {{ categoryError }}
             </p>
           </div>
 
@@ -322,7 +329,7 @@ const deleteWarehouse = (id: number) => {
               Cancel
             </UButton>
 
-            <BaseButton color="brand" @click="saveWarehouse">
+            <BaseButton color="brand" @click="saveSupplier">
               {{ isEdit ? "Update" : "Save" }}
             </BaseButton>
           </div>
