@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ref } from "vue";
-
 import {
   LayoutDashboard,
   Warehouse,
@@ -11,11 +9,17 @@ import {
   Menu,
 } from "lucide-vue-next";
 
-const isCollapsed = ref(false);
+defineProps({
+  isCollapsed: {
+    type: Boolean,
+    default: false,
+  },
+});
 
-const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value;
-};
+const emit = defineEmits([
+  "toggle-sidebar",
+  "navigate",
+]);
 </script>
 
 <template>
@@ -30,6 +34,7 @@ const toggleSidebar = () => {
       flex-col
       transition-all
       duration-300
+      overflow-hidden
     "
   >
     <div
@@ -43,28 +48,47 @@ const toggleSidebar = () => {
         border-white/10
       "
     >
-      <div class="flex items-center gap-3">
+      <div
+        class="
+          flex
+          items-center
+          gap-3
+          overflow-hidden
+        "
+      >
         <img
           src="/logo-wms.png"
           alt="Logo logistic core"
-          class="w-10 h-10 object-contain"
+          class="
+            w-10
+            h-10
+            object-contain
+            shrink-0
+          "
         />
 
         <h1
           v-if="!isCollapsed"
-          class="text-lg font-bold"
+          class="
+            text-lg
+            font-bold
+            whitespace-nowrap
+          "
         >
           Logistics Core
         </h1>
       </div>
 
       <button
-        @click="toggleSidebar"
+        @click="
+          emit('toggle-sidebar')
+        "
         class="
           p-2
           rounded-lg
           hover:bg-white/10
           transition
+          shrink-0
         "
       >
         <Menu class="w-5 h-5" />
@@ -74,7 +98,16 @@ const toggleSidebar = () => {
     <nav class="flex-1 p-4 space-y-2">
       <RouterLink
         to="/dashboard"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -85,7 +118,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <LayoutDashboard class="w-5 h-5 shrink-0" />
+        <LayoutDashboard
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           Dashboard
@@ -94,7 +129,16 @@ const toggleSidebar = () => {
 
       <RouterLink
         to="/warehouse"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -105,7 +149,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <Warehouse class="w-5 h-5 shrink-0" />
+        <Warehouse
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           Warehouse
@@ -114,7 +160,16 @@ const toggleSidebar = () => {
 
       <RouterLink
         to="/storageBin"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -125,7 +180,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <Package class="w-5 h-5 shrink-0" />
+        <Package
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           Storage Bin
@@ -134,7 +191,16 @@ const toggleSidebar = () => {
 
       <RouterLink
         to="/asset"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -145,7 +211,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <Factory class="w-5 h-5 shrink-0" />
+        <Factory
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           Asset
@@ -154,7 +222,16 @@ const toggleSidebar = () => {
 
       <RouterLink
         to="/supplier"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -165,7 +242,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <Truck class="w-5 h-5 shrink-0" />
+        <Truck
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           Supplier
@@ -174,7 +253,16 @@ const toggleSidebar = () => {
 
       <RouterLink
         to="/user"
+        @click.stop="
+          emit('navigate')
+        "
+        :class="
+          isCollapsed
+            ? 'justify-center'
+            : ''
+        "
         class="
+          w-full
           flex
           items-center
           gap-3
@@ -185,7 +273,9 @@ const toggleSidebar = () => {
           transition
         "
       >
-        <Users class="w-5 h-5 shrink-0" />
+        <Users
+          class="w-5 h-5 shrink-0"
+        />
 
         <span v-if="!isCollapsed">
           User
