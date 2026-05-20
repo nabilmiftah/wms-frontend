@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
@@ -7,15 +7,26 @@ import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
 import BaseModal from "../components/base/BaseModal.vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import { computed } from "vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
+import type { Asset } from "../types/asset";
+
+import {
+  getAssets,
+  createAsset,
+  updateAsset,
+  deleteAsset as deleteAssetService,
+} from "../services/asset.service";
+
+import { getSuppliers } from "../services/supplier.service";
+
+import { toast } from "vue-sonner";
 
 const openModal = ref(false);
 const search = ref("");
 
 const assetNumber = ref("");
 const assetName = ref("");
-const categoryId = ref("");
+const category = ref("");
 const price = ref("");
 const supplierId = ref("");
 
@@ -26,69 +37,92 @@ const priceError = ref("");
 
 const isEdit = ref(false);
 
-const selectedId = ref<number | null>(null);
+const selectedId = ref<string | null>(null);
 
-const assets = ref([
-  {
-    id: 1,
-    number: "AST_01",
-    name: "Laptop Asus",
-    supplierId: 1,
-    categoryId: 1,
-    price: 1000000,
-  },
-  {
-    id: 2,
-    number: "AST_02",
-    name: "Office Chair",
-    supplierId: 1,
-    categoryId: 2,
-    price: 500000,
-  },
-]);
+const assets = ref<Asset[]>([]);
 
-const assetCategories = ref([
-  {
-    id: 1,
-    name: "Small Asset",
-  },
-  {
-    id: 2,
-    name: "Medium Asset",
-  },
-  {
-    id: 3,
-    name: "Large Asset",
-  },
-]);
+const loading = ref(false);
 
-const suppliers = ref([
+const openDeleteModal = ref(false);
+
+const deleteId = ref("");
+
+const remarks = ref("");
+
+const remarksError = ref("");
+
+const fetchAssets = async () => {
+  try {
+    loading.value = true;
+
+    const response = await getAssets();
+
+    assets.value = response.data.sort((a: Asset, b: Asset) => {
+      return (
+        Number(a.assetNumber.replace("AST_", "")) -
+        Number(b.assetNumber.replace("AST_", ""))
+      );
+    });
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error("Failed to fetch assets");
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchAssets();
+
+  fetchSuppliers();
+});
+
+const assetCategories = [
   {
-    id: 1,
-    name: "PT Maju Jaya",
+    label: "Small Asset",
+    value: "SMALL_ASSET",
   },
   {
-    id: 2,
-    name: "PT Sumber Makmur",
+    label: "Medium Asset",
+    value: "MEDIUM_ASSET",
   },
-]);
+  {
+    label: "Large Asset",
+    value: "LARGE_ASSET",
+  },
+];
+
+const suppliers = ref([]);
+
+const fetchSuppliers = async () => {
+  try {
+    const response = await getSuppliers();
+
+    suppliers.value = response.data;
+  } catch (error) {
+    console.error(error);
+
+    toast.error("Failed to fetch suppliers");
+  }
+};
+
+const supplierOptions = computed(() => {
+  return suppliers.value.map((supplier: any) => ({
+    label: supplier.supName,
+
+    value: supplier.id,
+  }));
+});
 
 const filteredAssets = computed(() => {
   return assets.value.filter((asset) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      asset.number.toLowerCase().includes(keyword) ||
-
-      asset.name.toLowerCase().includes(keyword) ||
-
-      getCategoryName(asset.categoryId)
-        .toLowerCase()
-        .includes(keyword) ||
-
-      getSupplierName(asset.supplierId)
-        .toLowerCase()
-        .includes(keyword)
+      asset.assetNumber.toLowerCase().includes(keyword) ||
+      asset.assetName.toLowerCase().includes(keyword) ||
+      asset.category.toLowerCase().includes(keyword)
     );
   });
 });
@@ -99,37 +133,40 @@ const generateAssetCode = () => {
   return `AST_${String(nextNumber).padStart(2, "0")}`;
 };
 
+watch(openModal, (value) => {
+  if (value && !isEdit.value) {
+    assetNumber.value = generateAssetCode();
+  }
+});
+
 const openAddModal = () => {
+  resetForm();
+
   assetNumber.value = generateAssetCode();
+
+  isEdit.value = false;
 
   openModal.value = true;
 };
 
-const getCategoryName = (id: number) => {
-  const category = assetCategories.value.find((category) => category.id === id);
-
-  return category?.name || "-";
-};
-
-const getSupplierName = (id: number) => {
-  const supplier = suppliers.value.find((supplier) => supplier.id === id);
-
-  return supplier?.name || "-";
-};
-
-const saveAsset = () => {
+const saveAsset = async () => {
   assetNameError.value = "";
+
   categoryError.value = "";
+
   priceError.value = "";
+
   supplierError.value = "";
 
-  if (!assetName.value) {
-    assetNameError.value = "Asset name wajib diisi";
+  remarksError.value = "";
+
+  if (assetName.value.trim().length < 3) {
+    assetNameError.value = "Asset name minimal 3 karakter";
 
     return;
   }
 
-  if (!categoryId.value) {
+  if (!category.value) {
     categoryError.value = "Category wajib dipilih";
 
     return;
@@ -141,74 +178,127 @@ const saveAsset = () => {
     return;
   }
 
-  if (!supplierId.value) {
-    supplierError.value = "Supplier wajib dipilih";
-
-    return;
-  }
-
   if (isNaN(Number(price.value))) {
     priceError.value = "Price harus berupa angka";
 
     return;
   }
 
-  if (isEdit.value) {
-    const index = assets.value.findIndex(
-      (asset) => asset.id === selectedId.value,
-    );
+  try {
+    loading.value = true;
 
-    assets.value[index] = {
-      id: selectedId.value,
-      number: assetNumber.value,
-      name: assetName.value,
-      supplierId: supplierId.value,
-      categoryId: categoryId.value,
-      price: price.value,
-    };
-  } else {
-    assets.value.push({
-      id: Date.now(),
-      number: assetNumber.value,
-      name: assetName.value,
-      supplierId: supplierId.value,
-      categoryId: categoryId.value,
-      price: price.value,
-    });
+    if (isEdit.value) {
+      await updateAsset(selectedId.value!, {
+        assetName: assetName.value,
+
+        category: category.value,
+
+        price: price.value,
+
+        remarks: remarks.value,
+
+        supplierId: supplierId.value,
+      });
+
+      toast.success("Asset updated successfully");
+    } else {
+      await createAsset({
+        assetName: assetName.value,
+
+        category: category.value,
+
+        price: price.value,
+
+        remarks: remarks.value,
+
+        supplierId: supplierId.value,
+      });
+
+      toast.success("Asset created successfully");
+    }
+
+    await fetchAssets();
+
+    resetForm();
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error(error.response?.data?.message || "Something went wrong");
+  } finally {
+    loading.value = false;
   }
-
-  resetForm();
 };
 
 const resetForm = () => {
   assetNumber.value = "";
+
   assetName.value = "";
+
+  category.value = "";
+
   price.value = "";
-  categoryId.value = "";
+
+  remarks.value = "";
+
   supplierId.value = "";
 
+  assetNameError.value = "";
+
+  categoryError.value = "";
+
+  priceError.value = "";
+
+  supplierError.value = "";
+
+  remarksError.value = "";
+
   isEdit.value = false;
+
   selectedId.value = null;
 
   openModal.value = false;
 };
 
-const editAsset = (asset: any) => {
+const editAsset = (asset: Asset) => {
   isEdit.value = true;
 
   selectedId.value = asset.id;
 
-  assetNumber.value = asset.number;
-  assetName.value = asset.name;
+  assetNumber.value = asset.assetNumber;
+
+  assetName.value = asset.assetName;
+
   price.value = asset.price;
+
   category.value = asset.category;
-  supplierId.value = asset.supplierId;
+
+  remarks.value = asset.remarks || "";
+
+  supplierId.value = asset.supplierId || "";
 
   openModal.value = true;
 };
 
-const deleteAsset = (id: number) => {
-  assets.value = assets.value.filter((asset) => asset.id !== id);
+const openDeleteConfirmation = (id: string) => {
+  deleteId.value = id;
+
+  openDeleteModal.value = true;
+};
+
+const confirmDeleteAsset = async () => {
+  try {
+    await deleteAssetService(deleteId.value);
+
+    toast.success("Asset deleted successfully");
+
+    await fetchAssets();
+
+    openDeleteModal.value = false;
+  } catch (error) {
+    console.error(error);
+
+    toast.error("Failed to delete asset");
+  }
 };
 </script>
 
@@ -274,23 +364,30 @@ const deleteAsset = (id: number) => {
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ asset.number }}
+                    {{ asset.assetNumber }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ asset.name }}
+                    {{ asset.assetName }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ getCategoryName(asset.categoryId) }}
+                    {{
+                      asset.category === "SMALL_ASSET"
+                        ? "Small Asset"
+                        : asset.category === "MEDIUM_ASSET"
+                          ? "Medium Asset"
+                          : "Large Asset"
+                    }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ asset.price }}
+                    Rp
+                    {{ Number(asset.price).toLocaleString("id-ID") }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ getSupplierName(asset.supplierId) }}
+                    {{ asset.supplier?.supName || "-" }}
                   </td>
 
                   <td class="px-4 py-3">
@@ -304,11 +401,16 @@ const deleteAsset = (id: number) => {
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteAsset(asset.id)"
+                        @click="openDeleteConfirmation(asset.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
+                  </td>
+                </tr>
+                <tr v-if="filteredAssets.length === 0">
+                  <td colspan="7" class="text-center py-6 text-gray-400">
+                    No asset found
                   </td>
                 </tr>
               </tbody>
@@ -317,7 +419,11 @@ const deleteAsset = (id: number) => {
         </div>
       </main>
 
-      <BaseModal :open="openModal" title="Add Asset" @close="openModal = false">
+      <BaseModal
+        :open="openModal"
+        :title="isEdit ? 'Edit Asset' : 'Add Asset'"
+        @close="openModal = false"
+      >
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
@@ -352,11 +458,11 @@ const deleteAsset = (id: number) => {
             </label>
 
             <BaseSelect
-              v-model="categoryId"
+              v-model="category"
               :items="
                 assetCategories.map((category) => ({
-                  label: category.name,
-                  value: category.id,
+                  label: category.label,
+                  value: category.value,
                 }))
               "
               placeholder="Select Category"
@@ -385,12 +491,7 @@ const deleteAsset = (id: number) => {
 
             <BaseSelect
               v-model="supplierId"
-              :items="
-                suppliers.map((supplier) => ({
-                  label: supplier.name,
-                  value: supplier.id,
-                }))
-              "
+              :items="supplierOptions"
               placeholder="Select Supplier"
             />
             <p v-if="supplierError" class="text-red-500 text-xs mt-1">
@@ -405,6 +506,31 @@ const deleteAsset = (id: number) => {
 
             <BaseButton color="brand" @click="saveAsset">
               {{ isEdit ? "Update" : "Save" }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseModal>
+      <BaseModal
+        :open="openDeleteModal"
+        title="Delete Asset"
+        @close="openDeleteModal = false"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600">
+            Are you sure want to delete this asset?
+          </p>
+
+          <div class="flex justify-end gap-3">
+            <UButton
+              color="neutral"
+              variant="soft"
+              @click="openDeleteModal = false"
+            >
+              Cancel
+            </UButton>
+
+            <BaseButton color="error" @click="confirmDeleteAsset">
+              Delete
             </BaseButton>
           </div>
         </div>

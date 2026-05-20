@@ -1,61 +1,91 @@
 <script setup lang="ts">
-import { ref } from "vue";
-
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
 import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
 import BaseModal from "../components/base/BaseModal.vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import { computed } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import {
+  getWarehouses,
+  createWarehouse,
+  updateWarehouse,
+  deleteWarehouse as deleteWarehouseService,
+} from "../services/warehouse.service";
+import type { Warehouse } from "../types/warehouse";
+import { toast } from "vue-sonner";
 
-const openModal = ref(false);
 const search = ref("");
 
 const warehouseCode = ref("");
 const warehouseName = ref("");
 const city = ref("");
-const description = ref("");
+const remarks = ref("");
 const warehouseNameError = ref("");
 const cityError = ref("");
-const descriptionError = ref("");
+const remarksError = ref("");
 
 const isEdit = ref(false);
 
-const selectedId = ref<number | null>(null);
+const selectedId = ref<string | null>(null);
+const loading = ref(false);
 
-const warehouses = ref([
-  {
-    id: 1,
-    code: "WH_01",
-    name: "Gudang Jogja",
-    city: "Sleman",
-    description: "Gudang barang inti Jogja",
-  },
-  {
-    id: 2,
-    code: "WH_02",
-    name: "Gudang Bandung",
-    city: "Cimahi",
-    description: "Gudang distribusi Jawa Barat",
-  },
-  {
-    id: 3,
-    code: "WH_03",
-    name: "Gudang Jakarta",
-    city: "Cakung",
-    description: "Gudang barang impor",
-  },
-]);
+const openModal = ref(false);
+const openDeleteModal = ref(false);
+
+const deleteId = ref("");
+
+const fetchWarehouses =
+  async () => {
+    try {
+      loading.value = true;
+
+      const response =
+        await getWarehouses();
+
+      warehouses.value =
+        response.data.sort(
+          (a: Warehouse, b: Warehouse) => {
+            return (
+              Number(
+                a.whNumber.replace(
+                  "WH_",
+                  "",
+                ),
+              ) -
+              Number(
+                b.whNumber.replace(
+                  "WH_",
+                  "",
+                ),
+              )
+            );
+          },
+        );
+    } catch (error: any) {
+      console.error(error);
+
+      toast.error(
+        "Failed to fetch warehouses",
+      );
+    } finally {
+      loading.value = false;
+    }
+  };
+onMounted(() => {
+  fetchWarehouses();
+});
+
+const warehouses = ref<Warehouse[]>([]);
 
 const filteredWarehouses = computed(() => {
   return warehouses.value.filter((warehouse) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      warehouse.code.toLowerCase().includes(keyword) ||
-      warehouse.name.toLowerCase().includes(keyword) ||
-      warehouse.city.toLowerCase().includes(keyword)
+      warehouse.whNumber.toLowerCase().includes(keyword) ||
+      warehouse.whName.toLowerCase().includes(keyword) ||
+      warehouse.whLocation.toLowerCase().includes(keyword)
     );
   });
 });
@@ -66,69 +96,111 @@ const generateWarehouseCode = () => {
   return `WH_${String(nextNumber).padStart(2, "0")}`;
 };
 
+watch(openModal, (value) => {
+  if (value && !isEdit.value) {
+    warehouseCode.value = generateWarehouseCode();
+  }
+});
+
 const openAddModal = () => {
   warehouseCode.value = generateWarehouseCode();
 
   openModal.value = true;
 };
 
-const saveWarehouse = () => {
+const openDeleteConfirmation = (id: string) => {
+  deleteId.value = id;
+
+  openDeleteModal.value = true;
+};
+
+const confirmDeleteWarehouse = async () => {
+  try {
+    await deleteWarehouseService(deleteId.value);
+
+    toast.success("Warehouse deleted successfully");
+
+    await fetchWarehouses();
+
+    openDeleteModal.value = false;
+  } catch (error) {
+    console.error(error);
+
+    toast.error("Failed to delete warehouse");
+  }
+};
+
+const saveWarehouse = async () => {
   warehouseNameError.value = "";
+
   cityError.value = "";
-  descriptionError.value = "";
 
-  if (!warehouseName.value) {
-    warehouseNameError.value =
-      "Warehouse name wajib diisi";
+  remarksError.value = "";
 
-    return;
-  }
-
-  if (!city.value) {
-    cityError.value =
-      "City wajib diisi";
+  if (warehouseName.value.trim().length < 3) {
+    warehouseNameError.value = "Warehouse name minimal 3 karakter";
 
     return;
   }
 
-  if (!description.value) {
-    descriptionError.value =
-      "Description wajib diisi";
+  if (city.value.trim().length < 3) {
+    cityError.value = "City minimal 3 karakter";
 
     return;
   }
 
-  if (isEdit.value) {
-    const index = warehouses.value.findIndex(
-      (warehouse) =>
-        warehouse.id === selectedId.value
-    );
+  if (remarks.value.trim().length < 5) {
+    remarksError.value = "Remarks minimal 5 karakter";
 
-    warehouses.value[index] = {
-      id: selectedId.value,
-      code: warehouseCode.value,
-      name: warehouseName.value,
-      city: city.value,
-      description: description.value,
-    };
-  } else {
-    warehouses.value.push({
-      id: Date.now(),
-      code: warehouseCode.value,
-      name: warehouseName.value,
-      city: city.value,
-      description: description.value,
-    });
+    return;
   }
 
-  resetForm();
+  try {
+    loading.value = true;
+
+    if (isEdit.value) {
+      await updateWarehouse(selectedId.value, {
+        whName: warehouseName.value,
+
+        whLocation: city.value,
+
+        remarks: remarks.value,
+      });
+
+      toast.success("Warehouse updated successfully");
+    } else {
+      await createWarehouse({
+        whName: warehouseName.value,
+
+        whLocation: city.value,
+
+        remarks: remarks.value,
+      });
+
+      toast.success("Warehouse created successfully");
+    }
+
+    await fetchWarehouses();
+
+    resetForm();
+  } catch (error: any) {
+    console.error(error);
+
+    console.log("FULL ERROR:", error.response?.data);
+
+    console.log("ERROR DETAILS:", error.response?.data?.errors);
+
+    toast.error(error.response?.data?.message || "Something went wrong");
+  } finally {
+    loading.value = false;
+  }
 };
 
 const resetForm = () => {
   warehouseCode.value = "";
   warehouseName.value = "";
   city.value = "";
-  description.value = "";
+  remarks.value = "";
 
   isEdit.value = false;
   selectedId.value = null;
@@ -136,23 +208,20 @@ const resetForm = () => {
   openModal.value = false;
 };
 
-const editWarehouse = (warehouse: any) => {
-  isEdit.value = true;
-
+const editWarehouse = (warehouse: Warehouse) => {
   selectedId.value = warehouse.id;
 
-  warehouseCode.value = warehouse.code;
-  warehouseName.value = warehouse.name;
-  city.value = warehouse.city;
-  description.value = warehouse.description;
+  warehouseCode.value = warehouse.whNumber;
+
+  warehouseName.value = warehouse.whName;
+
+  city.value = warehouse.whLocation;
+
+  remarks.value = warehouse.remarks ?? "";
+
+  isEdit.value = true;
 
   openModal.value = true;
-};
-
-const deleteWarehouse = (id: number) => {
-  warehouses.value = warehouses.value.filter(
-    (warehouse) => warehouse.id !== id,
-  );
 };
 </script>
 
@@ -205,7 +274,7 @@ const deleteWarehouse = (id: number) => {
 
                   <th class="text-left px-4 py-3 font-semibold">Location</th>
 
-                  <th class="text-left px-4 py-3 font-semibold">Description</th>
+                  <th class="text-left px-4 py-3 font-semibold">Remarks</th>
 
                   <th class="text-center px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -218,19 +287,19 @@ const deleteWarehouse = (id: number) => {
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.code }}
+                    {{ warehouse.whNumber }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ warehouse.name }}
+                    {{ warehouse.whName }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.city }}
+                    {{ warehouse.whLocation }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ warehouse.description }}
+                    {{ warehouse.remarks }}
                   </td>
 
                   <td class="px-4 py-3">
@@ -244,7 +313,7 @@ const deleteWarehouse = (id: number) => {
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteWarehouse(warehouse.id)"
+                        @click="openDeleteConfirmation(warehouse.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
@@ -253,6 +322,13 @@ const deleteWarehouse = (id: number) => {
                 </tr>
               </tbody>
             </table>
+            <div v-if="loading" class="text-center py-10">Loading...</div>
+            <div
+              v-else-if="warehouses.length === 0"
+              class="text-center py-10 text-gray-400"
+            >
+              No warehouse found
+            </div>
           </div>
         </div>
       </main>
@@ -269,10 +345,9 @@ const deleteWarehouse = (id: number) => {
             </label>
 
             <BaseInput
-              class="block mb-2"
               v-model="warehouseCode"
-              placeholder="Warehouse Code"
-              disabled
+              readonly
+              placeholder="Auto Generated"
             />
             <label class="text-xs font-medium text-[#434655] block mb-2 italic">
               Auto-generated by system
@@ -304,16 +379,16 @@ const deleteWarehouse = (id: number) => {
 
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
-              Description
+              Remarks
             </label>
 
             <BaseInput
-              v-model="description"
+              v-model="remarks"
               :textarea="true"
               placeholder="Provide additional details about this facility..."
             />
-            <p v-if="descriptionError" class="text-red-500 text-xs mt-1">
-              {{ descriptionError }}
+            <p v-if="remarksError" class="text-red-500 text-xs mt-1">
+              {{ remarksError }}
             </p>
           </div>
 
@@ -324,6 +399,31 @@ const deleteWarehouse = (id: number) => {
 
             <BaseButton color="brand" @click="saveWarehouse">
               {{ isEdit ? "Update" : "Save" }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseModal>
+      <BaseModal
+        :open="openDeleteModal"
+        title="Delete Warehouse"
+        @close="openDeleteModal = false"
+      >
+        <div class="space-y-4">
+          <p class="text-gray-600">
+            Are you sure want to delete this warehouse?
+          </p>
+
+          <div class="flex justify-end gap-3">
+            <UButton
+              color="neutral"
+              variant="soft"
+              @click="openDeleteModal = false"
+            >
+              Cancel
+            </UButton>
+
+            <BaseButton color="error" @click="confirmDeleteWarehouse">
+              Delete
             </BaseButton>
           </div>
         </div>

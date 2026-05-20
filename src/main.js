@@ -7,6 +7,8 @@ import ui from '@nuxt/ui/vue-plugin'
 import router from './router'
 
 import VueApexCharts from 'vue3-apexcharts';
+import { Toaster } from "vue-sonner";
+import "vue-sonner/style.css";
 
 const app = createApp(App)
 
