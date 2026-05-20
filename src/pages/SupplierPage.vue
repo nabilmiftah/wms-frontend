@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, onMounted } from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
@@ -7,9 +7,18 @@ import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
 import BaseModal from "../components/base/BaseModal.vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import { computed } from "vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
+import { toast } from "vue-sonner";
+import type { Supplier } from "../types/supplier";
 
+import {
+  getSuppliers,
+  createSupplier,
+  updateSupplier,
+  deleteSupplier as deleteSupplierService,
+} from "../services/supplier.service";
+
+const loading = ref(false);
 const openModal = ref(false);
 const search = ref("");
 
@@ -25,49 +34,56 @@ const isEdit = ref(false);
 
 const selectedId = ref<number | null>(null);
 
-const suppliers = ref([
-  {
-    id: 1,
-    number: "SUP_01",
-    name: "PT. Jaya Abadi",
-    category: "Local Supplier",
-    address: "Jakarta, Indonesia",
-  },
-  {
-    id: 2,
-    number: "SUP_02",
-    name: "CV. Makmur Sejahtera",
-    category: "Import",
-    address: "Jl. Sudirman No. 20, Bandung",
-  },
-  {
-    id: 3,
-    number: "SUP_03",
-    name: "UD. Sentosa",
-    category: "Local",
-    address: "Jl. Diponegoro No. 30, Surabaya",
-  },
-]);
+const openDeleteModal = ref(false);
+
+const deleteId = ref("");
+
+const suppliers = ref<Supplier[]>([]);
 
 const categories = [
   {
     label: "Local",
-    value: "local",
+    value: "LOCAL",
   },
   {
     label: "Import",
-    value: "import",
+    value: "IMPORT",
   },
 ];
+
+const fetchSuppliers = async () => {
+  try {
+    loading.value = true;
+
+    const response = await getSuppliers();
+
+    suppliers.value = response.data.sort((a: any, b: any) => {
+      return (
+        Number(a.supNumber.replace("SUP_", "")) -
+        Number(b.supNumber.replace("SUP_", ""))
+      );
+    });
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error("Failed to fetch suppliers");
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchSuppliers();
+});
 
 const filteredSuppliers = computed(() => {
   return suppliers.value.filter((supplier) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      supplier.number.toLowerCase().includes(keyword) ||
-      supplier.name.toLowerCase().includes(keyword) ||
-      supplier.category.toLowerCase().includes(keyword) ||
+      supplier.supNumber.toLowerCase().includes(keyword) ||
+      supplier.supName.toLowerCase().includes(keyword) ||
+      supplier.supCategory.toLowerCase().includes(keyword) ||
       supplier.address.toLowerCase().includes(keyword)
     );
   });
@@ -82,54 +98,93 @@ const generateSupplierNumber = () => {
 const openAddModal = () => {
   supplierNumber.value = generateSupplierNumber();
 
+  isEdit.value = false;
+
   openModal.value = true;
 };
 
-const saveSupplier = () => {
+const confirmDeleteSupplier = async () => {
+  try {
+    await deleteSupplierService(deleteId.value);
+
+    toast.success("Supplier deleted successfully");
+
+    await fetchSuppliers();
+
+    openDeleteModal.value = false;
+  } catch (error) {
+    console.error(error);
+
+    toast.error("Failed to delete supplier");
+  }
+};
+
+const openDeleteConfirmation = (id: string) => {
+  deleteId.value = id;
+
+  openDeleteModal.value = true;
+};
+
+const saveSupplier = async () => {
   supplierNameError.value = "";
+
   addressError.value = "";
+
   categoryError.value = "";
 
-  if (!supplierName.value) {
-    supplierNameError.value = "Supplier name wajib diisi";
+  if (supplierName.value.trim().length < 3) {
+    supplierNameError.value = "Supplier name minimal 3 karakter";
 
     return;
   }
 
-  if (!address.value) {
-    addressError.value = "Address wajib diisi";
+  if (address.value.trim().length < 5) {
+    addressError.value = "Address minimal 5 karakter";
 
     return;
   }
+
   if (!category.value) {
     categoryError.value = "Category wajib dipilih";
 
     return;
   }
 
-  if (isEdit.value) {
-    const index = suppliers.value.findIndex(
-      (supplier) => supplier.id === selectedId.value,
-    );
+  try {
+    loading.value = true;
 
-    suppliers.value[index] = {
-      id: selectedId.value,
-      number: supplierNumber.value,
-      name: supplierName.value,
-      category: category.value,
-      address: address.value,
-    };
-  } else {
-    suppliers.value.push({
-      id: Date.now(),
-      number: supplierNumber.value,
-      name: supplierName.value,
-      category: category.value,
-      address: address.value,
-    });
+    if (isEdit.value) {
+      await updateSupplier(selectedId.value, {
+        supName: supplierName.value,
+
+        supCategory: category.value,
+
+        address: address.value,
+      });
+
+      toast.success("Supplier updated successfully");
+    } else {
+      await createSupplier({
+        supName: supplierName.value,
+
+        supCategory: category.value,
+
+        address: address.value,
+      });
+
+      toast.success("Supplier created successfully");
+    }
+
+    await fetchSuppliers();
+
+    resetForm();
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error(error.response?.data?.message || "Something went wrong");
+  } finally {
+    loading.value = false;
   }
-
-  resetForm();
 };
 
 const resetForm = () => {
@@ -144,22 +199,22 @@ const resetForm = () => {
   openModal.value = false;
 };
 
-const editSupplier = (supplier: any) => {
+const editSupplier = (supplier: Supplier) => {
   isEdit.value = true;
 
-  selectedId.value = supplier.id;
+  selectedId.value = Number(supplier.id);
 
-  supplierNumber.value = supplier.number;
-  supplierName.value = supplier.name;
-  category.value = supplier.category;
+  supplierNumber.value = supplier.supNumber;
+
+  supplierName.value = supplier.supName;
+
+  category.value = supplier.supCategory;
+
   address.value = supplier.address;
 
   openModal.value = true;
 };
 
-const deleteSupplier = (id: number) => {
-  suppliers.value = suppliers.value.filter((supplier) => supplier.id !== id);
-};
 </script>
 
 <template>
@@ -224,15 +279,15 @@ const deleteSupplier = (id: number) => {
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ supplier.number }}
+                    {{ supplier.supNumber }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ supplier.name }}
+                    {{ supplier.supName }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ supplier.category }}
+                    {{ supplier.supCategory === "LOCAL" ? "Local" : "Import" }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
@@ -250,11 +305,17 @@ const deleteSupplier = (id: number) => {
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteSupplier(supplier.id)"
+                        @click="openDeleteConfirmation(supplier.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
+                  </td>
+                </tr>
+
+                <tr v-if="filteredSuppliers.length === 0">
+                  <td colspan="5" class="text-center py-6 text-gray-400">
+                    No supplier found
                   </td>
                 </tr>
               </tbody>
@@ -265,7 +326,7 @@ const deleteSupplier = (id: number) => {
 
       <BaseModal
         :open="openModal"
-        title="Add Supplier"
+        :title="isEdit ? 'Edit Supplier' : 'Add Supplier'"
         @close="openModal = false"
       >
         <div class="space-y-4">
@@ -275,10 +336,9 @@ const deleteSupplier = (id: number) => {
             </label>
 
             <BaseInput
-              class="block mb-2"
               v-model="supplierNumber"
-              placeholder="Supplier Number"
-              disabled
+              readonly
+              placeholder="Auto Generated"
             />
             <label class="text-xs font-medium text-[#434655] block mb-2 italic">
               Auto-generated by system
@@ -325,12 +385,37 @@ const deleteSupplier = (id: number) => {
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
-            <UButton color="neutral" variant="soft" @click="openModal = false">
+            <UButton color="neutral" variant="soft" @click="resetForm">
               Cancel
             </UButton>
 
             <BaseButton color="brand" @click="saveSupplier">
               {{ isEdit ? "Update" : "Save" }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseModal>
+      <BaseModal
+        :open="openDeleteModal"
+        title="Delete Supplier"
+        @close="openDeleteModal = false"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600">
+            Are you sure want to delete this supplier?
+          </p>
+
+          <div class="flex justify-end gap-3">
+            <UButton
+              color="neutral"
+              variant="soft"
+              @click="openDeleteModal = false"
+            >
+              Cancel
+            </UButton>
+
+            <BaseButton color="error" @click="confirmDeleteSupplier">
+              Delete
             </BaseButton>
           </div>
         </div>

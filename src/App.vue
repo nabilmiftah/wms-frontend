@@ -2,6 +2,7 @@
 import { RouterView, useRoute } from "vue-router";
 import { computed } from "vue";
 import Sidebar from "./components/sidebar/AppSidebar.vue";
+import { Toaster } from "vue-sonner";
 
 const route = useRoute();
 const isAuthPage = computed(() => {
@@ -12,6 +13,8 @@ const isAuthPage = computed(() => {
 
 <template v-if="isAuthPage">
   <RouterView />
+
+  <Toaster richColors />
 </template>
 
 <style>

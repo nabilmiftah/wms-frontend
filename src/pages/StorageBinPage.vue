@@ -1,204 +1,265 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 
-import { Pencil, Trash2, Search, Plus, Warehouse } from "lucide-vue-next";
+import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
 import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
 import BaseModal from "../components/base/BaseModal.vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import { computed } from "vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
-import { watch } from "vue";
+import { toast } from "vue-sonner";
+import type { StorageBin } from "../types/storage-bin";
+import type { Warehouse } from "../types/warehouse";
+import type { Asset } from "../types/asset";
 
+import {
+  getStorageBins,
+  createStorageBin,
+  updateStorageBin,
+  deleteStorageBin as deleteStorageBinService,
+} from "../services/storage-bin.service";
+
+import { getWarehouses } from "../services/warehouse.service";
+import { getAssets, updateAsset } from "../services/asset.service";
+
+const loading = ref(false);
 const openModal = ref(false);
 const search = ref("");
 
-const storageBinNumber = ref("");
 const warehouseId = ref("");
-const assetCategoryId = ref("");
+const category = ref("");
+const remarks = ref("");
 const assetId = ref("");
+
 const warehouseError = ref("");
-const assetCategoryError = ref("");
-const assetError = ref("");
+const categoryError = ref("");
 
 const isEdit = ref(false);
+const selectedId = ref<string | null>(null);
 
-const selectedId = ref<number | null>(null);
+const openDeleteModal = ref(false);
+const deleteId = ref("");
 
-const storageBins = ref([
-  {
-    id: 1,
-    number: "WH_01_001",
-    warehouseId: 1,
-    assetCategoryId: 1,
-    assetId: 1,
-  },
-  {
-    id: 2,
-    number: "WH_02_002",
-    warehouseId: 2,
-    assetCategoryId: 2,
-    assetId: 2,
-  },
-]);
+const storageBins = ref<StorageBin[]>([]);
+const warehouses = ref<Warehouse[]>([]);
+const assets = ref<Asset[]>([]);
 
-const assetCategories = ref([
-  {
-    id: 1,
-    name: "Small Asset",
-  },
-  {
-    id: 2,
-    name: "Medium Asset",
-  },
-  {
-    id: 3,
-    name: "Large Asset",
-  },
-]);
+const categoryOptions = [
+  { label: "Small Asset", value: "SMALL_ASSET" },
+  { label: "Medium Asset", value: "MEDIUM_ASSET" },
+  { label: "Large Asset", value: "LARGE_ASSET" },
+];
 
-const warehouses = ref([
-  {
-    id: 1,
-    code: "WH_01",
-    name: "Gudang Jakarta",
-  },
-  {
-    id: 2,
-    code: "WH_02",
-    name: "Gudang Bandung",
-  },
-]);
+const warehouseOptions = computed(() =>
+  warehouses.value.map((wh) => ({
+    label: wh.whName,
+    value: wh.id,
+  })),
+);
 
-const assets = ref([
-  {
-    id: 1,
-    name: "Laptop Asus",
-  },
-  {
-    id: 2,
-    name: "Office Chair",
-  },
-]);
+// Filter asset by category yang dipilih + hanya yang belum punya storageBin
+// (kecuali asset yang sedang terpasang di bin yang sedang diedit)
+const assetOptions = computed(() => {
+  if (!category.value) return [];
 
-const getWarehouseName = (id: number) => {
-  const warehouse = warehouses.value.find((warehouse) => warehouse.id === id);
+  return assets.value
+    .filter((asset) => {
+      const sameCategory = asset.category === category.value;
+      const isUnallocated = asset.storageBinId === null;
+      const isCurrentBinAsset = asset.storageBinId === selectedId.value;
 
-  return warehouse?.name || "-";
+      return sameCategory && (isUnallocated || isCurrentBinAsset);
+    })
+    .map((asset) => ({
+      label: `${asset.assetNumber} — ${asset.assetName}`,
+      value: asset.id,
+    }));
+});
+
+const getCategoryLabel = (cat: string) => {
+  const map: Record<string, string> = {
+    SMALL_ASSET: "Small Asset",
+    MEDIUM_ASSET: "Medium Asset",
+    LARGE_ASSET: "Large Asset",
+  };
+  return map[cat] || cat;
 };
 
-const getCategoryName = (id: number) => {
-  const category = assetCategories.value.find((category) => category.id === id);
+// Reset assetId kalau category berubah (supaya tidak ada mismatch)
+watch(category, () => {
+  assetId.value = "";
+});
 
-  return category?.name || "-";
+const fetchWarehouses = async () => {
+  try {
+    const response = await getWarehouses();
+    warehouses.value = response.data;
+  } catch (error: any) {
+    console.error(error);
+  }
 };
 
-const getAssetName = (id: number) => {
-  const asset = assets.value.find((asset) => asset.id === id);
-
-  return asset?.name || "-";
+const fetchAssets = async () => {
+  try {
+    const response = await getAssets();
+    assets.value = response.data;
+  } catch (error: any) {
+    console.error(error);
+  }
 };
+
+const fetchStorageBins = async () => {
+  try {
+    loading.value = true;
+
+    const response = await getStorageBins();
+
+    storageBins.value = response.data.sort((a: StorageBin, b: StorageBin) => {
+      return a.binAddress.localeCompare(b.binAddress);
+    });
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error("Failed to fetch storage bins");
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchWarehouses();
+  fetchAssets();
+  fetchStorageBins();
+});
 
 const filteredStorageBins = computed(() => {
   return storageBins.value.filter((bin) => {
     const keyword = search.value.toLowerCase();
 
     return (
-      bin.number.toLowerCase().includes(keyword) ||
-
-      getWarehouseName(bin.warehouseId)
-        .toLowerCase()
-        .includes(keyword) ||
-
-      getCategoryName(bin.assetCategoryId)
-        .toLowerCase()
-        .includes(keyword) ||
-
-      getAssetName(bin.assetId)
-        .toLowerCase()
-        .includes(keyword)
+      bin.binAddress.toLowerCase().includes(keyword) ||
+      bin.warehouse?.whName.toLowerCase().includes(keyword) ||
+      bin.category.toLowerCase().includes(keyword) ||
+      getCategoryLabel(bin.category).toLowerCase().includes(keyword) ||
+      (bin.asset?.assetName ?? "").toLowerCase().includes(keyword) ||
+      (bin.remarks ?? "").toLowerCase().includes(keyword)
     );
   });
 });
 
-const generateStorageBinNumber = () => {
-  const warehouse = warehouses.value.find(
-    (warehouse) => warehouse.id === warehouseId.value,
-  );
-
-  if (!warehouse) return "";
-
-  const totalBin =
-    storageBins.value.filter((bin) => bin.warehouseId === warehouseId.value)
-      .length + 1;
-
-  return `${warehouse.code}_${String(totalBin).padStart(3, "0")}`;
-};
-
-watch(warehouseId, () => {
-  storageBinNumber.value = generateStorageBinNumber();
-});
-
 const openAddModal = () => {
-  storageBinNumber.value = generateStorageBinNumber();
-
+  isEdit.value = false;
   openModal.value = true;
 };
 
-const saveStorageBin = () => {
+const confirmDeleteStorageBin = async () => {
+  try {
+    await deleteStorageBinService(deleteId.value);
+
+    toast.success("Storage bin deleted successfully");
+
+    await fetchStorageBins();
+
+    openDeleteModal.value = false;
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error(
+      error.response?.data?.message || "Failed to delete storage bin",
+    );
+  }
+};
+
+const openDeleteConfirmation = (id: string) => {
+  deleteId.value = id;
+  openDeleteModal.value = true;
+};
+
+const saveStorageBin = async () => {
   warehouseError.value = "";
-  assetCategoryError.value = "";
-  assetError.value = "";
+  categoryError.value = "";
 
   if (!warehouseId.value) {
     warehouseError.value = "Warehouse wajib dipilih";
-
     return;
   }
 
-  if (!assetCategoryId.value) {
-    assetCategoryError.value = "Asset category wajib dipilih";
-
+  if (!category.value) {
+    categoryError.value = "Category wajib dipilih";
     return;
   }
 
-  if (!assetId.value) {
-    assetError.value = "Asset wajib dipilih";
+  try {
+    loading.value = true;
 
-    return;
+    if (isEdit.value && selectedId.value) {
+      // Update storage bin (category & remarks)
+      await updateStorageBin(selectedId.value, {
+        category: category.value as
+          | "SMALL_ASSET"
+          | "MEDIUM_ASSET"
+          | "LARGE_ASSET",
+        remarks: remarks.value || undefined,
+      });
+
+      // Handle perubahan asset:
+      const currentBin = storageBins.value.find(
+        (b) => b.id === selectedId.value,
+      );
+      const prevAssetId = currentBin?.asset?.id ?? null;
+
+      // Kalau ada asset sebelumnya & diganti / dikosongkan → lepas asset lama
+      if (prevAssetId && prevAssetId !== assetId.value) {
+        await updateAsset(prevAssetId, { storageBinId: null });
+      }
+
+      // Kalau ada asset baru dipilih → alokasikan ke bin ini
+      if (assetId.value && assetId.value !== prevAssetId) {
+        await updateAsset(assetId.value, { storageBinId: selectedId.value });
+      }
+
+      toast.success("Storage bin updated successfully");
+    } else {
+      // Create storage bin dulu
+      const res = await createStorageBin({
+        warehouseId: warehouseId.value,
+        category: category.value as
+          | "SMALL_ASSET"
+          | "MEDIUM_ASSET"
+          | "LARGE_ASSET",
+        remarks: remarks.value || undefined,
+      });
+
+      // Kalau ada asset dipilih → alokasikan ke bin baru
+      if (assetId.value) {
+        const newBinId = res.data.id;
+        await updateAsset(assetId.value, { storageBinId: newBinId });
+      }
+
+      toast.success("Storage bin created successfully");
+    }
+
+    await fetchAssets();
+    await fetchStorageBins();
+
+    resetForm();
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error(error.response?.data?.message || "Something went wrong");
+  } finally {
+    loading.value = false;
   }
-
-  if (isEdit.value) {
-    const index = storageBins.value.findIndex(
-      (bin) => bin.id === selectedId.value!,
-    );
-
-    storageBins.value[index] = {
-      id: selectedId.value!,
-      number: storageBinNumber.value,
-      warehouseId: warehouseId.value,
-      assetCategoryId: assetCategoryId.value,
-      assetId: assetId.value,
-    };
-  } else {
-    storageBins.value.push({
-      id: Date.now(),
-      number: storageBinNumber.value,
-      warehouseId: warehouseId.value,
-      assetCategoryId: assetCategoryId.value,
-      assetId: assetId.value,
-    });
-  }
-
-  resetForm();
 };
 
 const resetForm = () => {
-  storageBinNumber.value = "";
   warehouseId.value = "";
-  assetCategoryId.value = "";
+  category.value = "";
+  remarks.value = "";
   assetId.value = "";
+  warehouseError.value = "";
+  categoryError.value = "";
 
   isEdit.value = false;
   selectedId.value = null;
@@ -206,21 +267,16 @@ const resetForm = () => {
   openModal.value = false;
 };
 
-const editStorageBin = (bin: any) => {
+const editStorageBin = (bin: StorageBin) => {
   isEdit.value = true;
 
   selectedId.value = bin.id;
-
-  storageBinNumber.value = bin.number;
   warehouseId.value = bin.warehouseId;
-  assetCategoryId.value = bin.assetCategoryId;
-  assetId.value = bin.assetId;
+  category.value = bin.category;
+  remarks.value = bin.remarks || "";
+  assetId.value = bin.asset?.id || "";
 
   openModal.value = true;
-};
-
-const deleteStorageBin = (id: number) => {
-  storageBins.value = storageBins.value.filter((bin) => bin.id !== id);
 };
 </script>
 
@@ -265,17 +321,15 @@ const deleteStorageBin = (id: number) => {
             <table class="w-full text-sm">
               <thead class="bg-gray-100 text-gray-700">
                 <tr>
-                  <th class="text-left px-4 py-3 font-semibold">
-                    Storage Bin Number
-                  </th>
+                  <th class="text-left px-4 py-3 font-semibold">Bin Address</th>
 
                   <th class="text-left px-4 py-3 font-semibold">Warehouse</th>
 
-                  <th class="text-left px-4 py-3 font-semibold">
-                    Asset Category
-                  </th>
+                  <th class="text-left px-4 py-3 font-semibold">Category</th>
 
                   <th class="text-left px-4 py-3 font-semibold">Asset</th>
+
+                  <th class="text-left px-4 py-3 font-semibold">Remarks</th>
 
                   <th class="text-center px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -288,19 +342,23 @@ const deleteStorageBin = (id: number) => {
                   class="border-t border-gray-100 hover:bg-gray-50 transition"
                 >
                   <td class="px-4 py-3 text-gray-700">
-                    {{ bin.number }}
+                    {{ bin.binAddress }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ getWarehouseName(bin.warehouseId) }}
+                    {{ bin.warehouse?.whName || "-" }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ getCategoryName(bin.assetCategoryId) }}
+                    {{ getCategoryLabel(bin.category) }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ getAssetName(bin.assetId) }}
+                    {{ bin.asset?.assetName || "-" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-gray-700">
+                    {{ bin.remarks || "-" }}
                   </td>
 
                   <td class="px-4 py-3">
@@ -314,11 +372,17 @@ const deleteStorageBin = (id: number) => {
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteStorageBin(bin.id)"
+                        @click="openDeleteConfirmation(bin.id)"
                       >
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
+                  </td>
+                </tr>
+
+                <tr v-if="filteredStorageBins.length === 0">
+                  <td colspan="6" class="text-center py-6 text-gray-400">
+                    No storage bin found
                   </td>
                 </tr>
               </tbody>
@@ -327,28 +391,14 @@ const deleteStorageBin = (id: number) => {
         </div>
       </main>
 
+      <!-- Modal Add / Edit -->
       <BaseModal
         :open="openModal"
-        title="Add Storage Bin"
-        @close="openModal = false"
+        :title="isEdit ? 'Edit Storage Bin' : 'Add Storage Bin'"
+        @close="resetForm"
       >
         <div class="space-y-4">
-          <div>
-            <label class="text-sm font-medium text-[#434655] block mb-2">
-              Storage Bin Number
-            </label>
-
-            <BaseInput
-              class="block mb-2"
-              v-model="storageBinNumber"
-              placeholder="Storage Bin Number"
-              disabled
-            />
-            <label class="text-xs font-medium text-[#434655] block mb-2 italic">
-              Auto-generated by system
-            </label>
-          </div>
-
+          <!-- Warehouse (disabled saat edit) -->
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
               Warehouse
@@ -356,66 +406,109 @@ const deleteStorageBin = (id: number) => {
 
             <BaseSelect
               v-model="warehouseId"
-              :items="
-                warehouses.map((warehouse) => ({
-                  label: warehouse.name,
-                  value: warehouse.id,
-                }))
-              "
-              placeholder="Warehouse"
+              :items="warehouseOptions"
+              placeholder="Select Warehouse"
+              :disabled="isEdit"
             />
+
             <p v-if="warehouseError" class="text-red-500 text-xs mt-1">
               {{ warehouseError }}
             </p>
+
+            <label
+              v-if="isEdit"
+              class="text-xs font-medium text-[#434655] block mt-1 italic"
+            >
+              Warehouse cannot be changed after creation
+            </label>
           </div>
 
+          <!-- Category -->
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
               Category
             </label>
 
             <BaseSelect
-              v-model="assetCategoryId"
-              :items="
-                assetCategories.map((category) => ({
-                  label: category.name,
-                  value: category.id,
-                }))
-              "
-              placeholder="Asset Category"
+              v-model="category"
+              :items="categoryOptions"
+              placeholder="Select Category"
             />
-            <p v-if="assetCategoryError" class="text-red-500 text-xs mt-1">
-              {{ assetCategoryError }}
+
+            <p v-if="categoryError" class="text-red-500 text-xs mt-1">
+              {{ categoryError }}
             </p>
           </div>
 
+          <!-- Asset (opsional, difilter by category) -->
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
               Asset
+              <span class="text-gray-400 font-normal">(optional)</span>
             </label>
 
             <BaseSelect
               v-model="assetId"
-              :items="
-                assets.map((asset) => ({
-                  label: asset.name,
-                  value: asset.id,
-                }))
-              "
+              :items="assetOptions"
               placeholder="Select Asset"
+              :disabled="!category"
             />
-            <p v-if="assetError" class="text-red-500 text-xs mt-1">
-              {{ assetError }}
-            </p>
+
+            <label class="text-xs text-gray-400 block mt-1 italic">
+              {{
+                category
+                  ? "Hanya menampilkan asset dengan category yang sama & belum dialokasikan"
+                  : "Pilih category terlebih dahulu"
+              }}
+            </label>
+          </div>
+
+          <!-- Remarks -->
+          <div>
+            <label class="text-sm font-medium text-[#434655] block mb-2">
+              Remarks
+            </label>
+
+            <BaseInput
+              v-model="remarks"
+              placeholder="Additional notes (optional)"
+            />
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
-            <UButton color="neutral" variant="soft" @click="openModal = false">
+            <UButton color="neutral" variant="soft" @click="resetForm">
               Cancel
             </UButton>
 
             <BaseButton color="brand" @click="saveStorageBin">
               {{ isEdit ? "Update" : "Save" }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseModal>
+
+      <!-- Modal Delete Confirmation -->
+      <BaseModal
+        :open="openDeleteModal"
+        title="Delete Storage Bin"
+        @close="openDeleteModal = false"
+      >
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600">
+            Are you sure want to delete this storage bin?
+          </p>
+
+          <div class="flex justify-end gap-3">
+            <UButton
+              color="neutral"
+              variant="soft"
+              @click="openDeleteModal = false"
+            >
+              Cancel
+            </UButton>
+
+            <BaseButton color="error" @click="confirmDeleteStorageBin">
+              Delete
             </BaseButton>
           </div>
         </div>

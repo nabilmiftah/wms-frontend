@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import {
+  ref,
+  computed,
+  onMounted,
+  watch,
+} from "vue";
 
 import { Pencil, Trash2, Search, Plus } from "lucide-vue-next";
 
@@ -7,7 +12,15 @@ import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
 import BaseModal from "../components/base/BaseModal.vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import { computed } from "vue";
+
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser as deleteUserService,
+} from "../services/user.service";
+import type { User } from "../types/user";
+import { toast } from "vue-sonner";
 
 const openModal = ref(false);
 const search = ref("");
@@ -23,157 +36,307 @@ const phoneError = ref('')
 
 const isEdit = ref(false);
 
-const selectedId = ref<number | null>(null);
+const selectedId =
+  ref<string | null>(
+    null,
+  );
 
-const users = ref([
-  {
-    id: 1,
-    number: "USR_01",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    telephone: "+6281234567890",
-  },
-  {
-    id: 2,
-    number: "USR_02",
-    name: "Jane Smith",
-    email: "jane.smith@example.com",
-    telephone: "+6281234567891",
-  },
-  {
-    id: 3,
-    number: "USR_03",
-    name: "Bob Johnson",
-    email: "bob.johnson@example.com",
-    telephone: "+6281234567892",
-  },
-]);     
+const loading = ref(false);
 
+const openDeleteModal =
+  ref(false);
 
-const filteredUsers = computed(() => {
-  return users.value.filter((user) => {
-    const keyword = search.value.toLowerCase();
+const deleteId = ref("");
 
-    return (
-      user.number.toLowerCase().includes(keyword) ||
-      user.name.toLowerCase().includes(keyword) ||
-      user.email.toLowerCase().includes(keyword) ||
-      user.telephone.toLowerCase().includes(keyword)
-    );
-  });
+const password =
+  ref("");
+
+const passwordError =
+  ref("");
+
+const users =
+  ref<User[]>([]);
+
+const fetchUsers =
+  async () => {
+    try {
+      loading.value = true;
+
+      const response =
+        await getUsers();
+
+      users.value =
+        response.data.sort(
+          (a: User, b: User) => {
+            return (
+              Number(
+                a.userNumber.replace(
+                  "USER_",
+                  "",
+                ),
+              ) -
+              Number(
+                b.userNumber.replace(
+                  "USER_",
+                  "",
+                ),
+              )
+            );
+          },
+        );
+    } catch (error: any) {
+      console.error(error);
+
+      toast.error(
+        "Failed to fetch users",
+      );
+    } finally {
+      loading.value = false;
+    }
+  };
+
+onMounted(() => {
+  fetchUsers();
 });
 
-const generateUserNumber = () => {
-  const nextNumber = users.value.length + 1;
+const filteredUsers =
+  computed(() => {
+    return users.value.filter(
+      (user) => {
+        const keyword =
+          search.value.toLowerCase();
 
-  return `USR_${String(nextNumber).padStart(2, "0")}`;
-};
+        return (
+          user.userNumber
+            .toLowerCase()
+            .includes(keyword) ||
+
+          user.userName
+            .toLowerCase()
+            .includes(keyword) ||
+
+          user.email
+            .toLowerCase()
+            .includes(keyword) ||
+
+          (user.telp || "")
+            .toLowerCase()
+            .includes(keyword)
+        );
+      },
+    );
+  });
+
+const generateUserNumber =
+  () => {
+    const nextNumber =
+      users.value.length + 1;
+
+    return `USER_${String(
+      nextNumber,
+    ).padStart(2, "0")}`;
+  };
+
+watch(openModal, (value) => {
+  if (value && !isEdit.value) {
+    userNumber.value =
+      generateUserNumber();
+  }
+});
+
 
 const openAddModal = () => {
-  userNumber.value = generateUserNumber();
+  resetForm();
+
+  userNumber.value =
+    generateUserNumber();
+
+  isEdit.value = false;
 
   openModal.value = true;
 };
 
-const saveUser = () => {
-  userNameError.value = ""
-  emailError.value = ""
-  phoneError.value = ""
+const openDeleteConfirmation =
+  (id: string) => {
+    deleteId.value = id;
 
-  if (!userName.value) {
+    openDeleteModal.value =
+      true;
+  };
+
+const confirmDeleteUser =
+  async () => {
+    try {
+      await deleteUserService(
+        deleteId.value,
+      );
+
+      toast.success(
+        "User deleted successfully",
+      );
+
+      await fetchUsers();
+
+      openDeleteModal.value =
+        false;
+    } catch (error) {
+      console.error(error);
+
+      toast.error(
+        "Failed to delete user",
+      );
+    }
+  };
+
+const saveUser =
+  async () => {
     userNameError.value =
-      "User name wajib diisi"
+      "";
 
-    return
-  }
+    emailError.value = "";
 
-  if (!email.value) {
-    emailError.value =
-      "Email wajib diisi"
-
-    return
-  }
-
-  const emailRegex =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  if (!emailRegex.test(email.value)) {
-    emailError.value =
-      "Email tidak valid"
-
-    return
-  }
-
-  if (!telephone.value) {
     phoneError.value =
-      "Nomor telepon wajib diisi"
+      "";
 
-    return
-  }
+    passwordError.value =
+      "";
 
-  const phoneRegex = /^[0-9]+$/
+    if (
+      userName.value
+        .trim().length < 3
+    ) {
+      userNameError.value =
+        "User name minimal 3 karakter";
 
-  if (!phoneRegex.test(telephone.value)) {
-    phoneError.value =
-      "Nomor telepon hanya boleh angka"
+      return;
+    }
 
-    return
-  }
+    if (!email.value) {
+      emailError.value =
+        "Email wajib diisi";
 
-  if (isEdit.value) {
-    const index = users.value.findIndex(
-      (user) =>
-        user.id === selectedId.value,
-    );
+      return;
+    }
 
-    users.value[index] = {
-      id: selectedId.value,
-      number: userNumber.value,
-      name: userName.value,
-      email: email.value,
-      telephone: telephone.value,
-    };
-  } else {
-    users.value.push({
-      id: Date.now(),
-      number: userNumber.value,
-      name: userName.value,
-      email: email.value,
-      telephone: telephone.value,
-    });
-  }
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  resetForm();
-};
+    if (
+      !emailRegex.test(
+        email.value,
+      )
+    ) {
+      emailError.value =
+        "Email tidak valid";
+
+      return;
+    }
+
+    if (
+      !isEdit.value &&
+      password.value.length <
+      8
+    ) {
+      passwordError.value =
+        "Password minimal 8 karakter";
+
+      return;
+    }
+
+    try {
+      loading.value = true;
+
+      if (isEdit.value) {
+        await updateUser(
+          selectedId.value!,
+          {
+            userName:
+              userName.value,
+
+            telp:
+              telephone.value,
+          },
+        );
+
+        toast.success(
+          "User updated successfully",
+        );
+      } else {
+        await createUser({
+          userName:
+            userName.value,
+
+          email:
+            email.value,
+
+          password:
+            password.value,
+
+          telp:
+            telephone.value,
+        });
+        toast.success(
+          "User created successfully",
+        );
+      }
+
+      await fetchUsers();
+
+      resetForm();
+    } catch (error: any) {
+      console.error(error);
+
+      toast.error(
+        error.response?.data
+          ?.message ||
+        "Something went wrong",
+      );
+    } finally {
+      loading.value = false;
+    }
+  };
 
 const resetForm = () => {
   userNumber.value = "";
   userName.value = "";
   email.value = "";
+  password.value = "";
   telephone.value = "";
-
+  userNameError.value = "";
+  emailError.value = "";
+  passwordError.value = "";
+  phoneError.value = "";
   isEdit.value = false;
   selectedId.value = null;
 
   openModal.value = false;
 };
 
-const editUser = (user: any) => {
+const editUser = (
+  user: User,
+) => {
+  resetForm();
+
   isEdit.value = true;
 
-  selectedId.value = user.id;
+  selectedId.value =
+    user.id;
 
-  userNumber.value = user.number;
-  userName.value = user.name;
-  email.value = user.email;
-  telephone.value = user.telephone;
+  userNumber.value =
+    user.userNumber;
+
+  userName.value =
+    user.userName;
+
+  email.value =
+    user.email;
+
+  telephone.value =
+    user.telp || "";
 
   openModal.value = true;
 };
 
-const deleteUser = (id: number) => {
-  users.value = users.value.filter((user) => user.id !== id);
-};
 </script>
 
 <template>
@@ -186,21 +349,13 @@ const deleteUser = (id: number) => {
           <p class="text-sm text-gray-500 mt-1">Kelola master data user</p>
         </div>
 
-        <div
-          class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-5"
-        >
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-5">
           <div class="flex items-center justify-between gap-4">
             <div class="relative w-full max-w-md">
-              <Search
-                class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-              />
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
-              <BaseInput
-                v-model="search"
-                type="text"
-                placeholder="Search user"
-                class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#004AC6]"
-              />
+              <BaseInput v-model="search" type="text" placeholder="Search user"
+                class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#004AC6]" />
             </div>
 
             <BaseButton color="brand" @click="openAddModal">
@@ -232,17 +387,14 @@ const deleteUser = (id: number) => {
               </thead>
 
               <tbody>
-                <tr
-                  v-for="user in filteredUsers"
-                  :key="user.id"
-                  class="border-t border-gray-100 hover:bg-gray-50 transition"
-                >
+                <tr v-for="user in filteredUsers" :key="user.id"
+                  class="border-t border-gray-100 hover:bg-gray-50 transition">
                   <td class="px-4 py-3 text-gray-700">
-                    {{ user.number }}
+                    {{ user.userNumber }}
                   </td>
 
                   <td class="px-4 py-3 font-medium text-gray-900">
-                    {{ user.name }}
+                    {{ user.userName }}
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
@@ -250,22 +402,24 @@ const deleteUser = (id: number) => {
                   </td>
 
                   <td class="px-4 py-3 text-gray-700">
-                    {{ user.telephone }}
+                    {{ user.telp || "-" }}
                   </td>
 
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-center gap-2">
                       <button
                         class="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition"
-                        @click="editUser(user)"
-                      >
+                        @click="editUser(user)">
                         <Pencil class="w-4 h-4" />
                       </button>
 
                       <button
                         class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 transition"
-                        @click="deleteUser(user.id)"
-                      >
+                        @click="
+                          openDeleteConfirmation(
+                            user.id,
+                          )
+                          ">
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
@@ -277,23 +431,17 @@ const deleteUser = (id: number) => {
         </div>
       </main>
 
-      <BaseModal
-        :open="openModal"
-        title="Add User"
-        @close="openModal = false"
-      >
+      <BaseModal :open="openModal" :title="isEdit
+          ? 'Edit User'
+          : 'Add User'
+        " @close="openModal = false">
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium text-[#434655] block mb-2">
               User Number
             </label>
 
-            <BaseInput
-              class="block mb-2"
-              v-model="userNumber"
-              placeholder="User Number"
-              disabled
-            />
+            <BaseInput class="block mb-2" v-model="userNumber" placeholder="User Number" disabled />
             <label class="text-xs font-medium text-[#434655] block mb-2 italic">
               Auto-generated by system
             </label>
@@ -315,9 +463,21 @@ const deleteUser = (id: number) => {
               Email
             </label>
 
-            <BaseInput v-model="email" type="email" placeholder="User Email"  " />
+            <BaseInput v-model="email" :readonly="isEdit" placeholder="Email" />
             <p class="text-red-500 text-xs mt-1" v-if="emailError">
               {{ emailError }}
+            </p>
+          </div>
+
+          <div v-if="!isEdit">
+            <label class="text-sm font-medium text-[#434655] block mb-2">
+              Password
+            </label>
+
+            <BaseInput v-model="password" type="password" placeholder="Password" />
+
+            <p v-if="passwordError" class="text-red-500 text-xs mt-1">
+              {{ passwordError }}
             </p>
           </div>
 
@@ -327,9 +487,9 @@ const deleteUser = (id: number) => {
             </label>
 
             <BaseInput v-model="telephone" type="tel" placeholder="08xxxxxxx" " />
-            <p class="text-red-500 text-xs mt-1" v-if="phoneError">
+            <p class=" text-red-500 text-xs mt-1" v-if="phoneError">
               {{ phoneError }}
-            </p>
+              </p>
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
@@ -339,6 +499,33 @@ const deleteUser = (id: number) => {
 
             <BaseButton color="brand" @click="saveUser">
               {{ isEdit ? "Update" : "Save" }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseModal>
+      <BaseModal :open="openDeleteModal
+        " title="Delete User" @close="
+          openDeleteModal =
+          false
+          ">
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600">
+            Are you sure want to
+            delete this user?
+          </p>
+
+          <div class="flex justify-end gap-3">
+            <UButton color="neutral" variant="soft" @click="
+              openDeleteModal =
+              false
+              ">
+              Cancel
+            </UButton>
+
+            <BaseButton color="error" @click="
+              confirmDeleteUser
+            ">
+              Delete
             </BaseButton>
           </div>
         </div>
