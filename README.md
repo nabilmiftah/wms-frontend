@@ -1,6 +1,6 @@
 # 📦 WMS — Warehouse Management System (Frontend)
 
-Frontend application for the Warehouse Management System, built with Vue 3 + TypeScript + Vite.
+Frontend application for the Warehouse Management System, built with Vue 3  + Vite.
 
 > 🔗 Backend repository is maintained separately. Make sure the backend server is running before starting the frontend.
 
@@ -10,7 +10,7 @@ Frontend application for the Warehouse Management System, built with Vue 3 + Typ
 
 | Technology | Purpose |
 |---|---|
-| Vue 3 + TypeScript | Main framework |
+| Vue 3 | Main framework |
 | Vite | Build tool & dev server |
 | Tailwind CSS | Styling |
 | Nuxt UI | UI component library |
