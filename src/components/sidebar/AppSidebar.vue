@@ -4,8 +4,24 @@ import {
   Warehouse,
   Package,
   Truck,
-  Users
-} from 'lucide-vue-next'
+  Users,
+  Factory,
+  Menu,
+  FileSpreadsheet,
+} from "lucide-vue-next";
+
+import { useRoute } from "vue-router";
+
+const route = useRoute();
+
+defineProps({
+  isCollapsed: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+const emit = defineEmits(["toggle-sidebar", "navigate"]);
 </script>
 
 <template>
@@ -56,6 +72,23 @@ import {
       >
         <Users class="w-5 h-5" />
         User
+      </RouterLink>
+<!-- Report -->
+      <RouterLink
+        to="/report"
+        @click.stop="emit('navigate')"
+        :class="[
+          route.path === '/report'
+            ? 'bg-white/15 text-white font-semibold'
+            : 'text-white/70 hover:bg-white/10 hover:text-white',
+          
+          isCollapsed ? 'justify-center' : '',
+        ]"
+        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
+      >
+        <FileSpreadsheet class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed"> Report</span>
       </RouterLink>
     </nav>
   </aside>
