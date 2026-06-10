@@ -9,6 +9,7 @@ import DashboardPage from "../pages/DashboardPage.vue";
 // import AssetPage from "../pages/AssetPage.vue";
 // import StorageBinPage from "../pages/StorageBinPage.vue";
 import ReportPage from "../pages/ReportPage.vue";
+import AnalyticsPage from "../pages/AnalyticsPage.vue";
 
 const routes = [
   {
@@ -51,6 +52,10 @@ const routes = [
     path: "/report",
     component: ReportPage,
   },
+  {
+    path: "/analytics",
+    component: AnalyticsPage
+  }
 ];
 
 const router = createRouter({

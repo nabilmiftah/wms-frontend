@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import * as XLSX from "xlsx";
 import MainLayout from "../components/layouts/MainLayout.vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
 import BaseButton from "../components/base/BaseButton.vue";
@@ -73,6 +74,27 @@ const mockReports = ref([
     updatedStock: "85 pcs",
   },
 ]);
+
+function exportExcel() {
+  const rows = mockReports.value.map((row) => ({
+    "WO Number": row.woNumber,
+    "WO Category": row.woCategory,
+    "Warehouse": row.warehouse,
+    "Storage Bin": row.storageBin,
+    "Asset Name": row.assetName,
+    "Supplier": row.supplier,
+    "Label Code": row.labelCode,
+    "Scanned At": row.scannedAt,
+    "Scanned By": row.scannedBy,
+    "Updated Stock": row.updatedStock,
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Report Transaction");
+
+  XLSX.writeFile(wb, `Report_Transaction_${dateRange.value}.xlsx`);
+}
 </script>
 
 <template>
@@ -88,7 +110,7 @@ const mockReports = ref([
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div class="flex flex-wrap items-center gap-4 flex-1">
             
-            <div class="flex flex-col gap-1.5 w-56">
+            <div class="flex flex-col gap-1.5 w-65">
               <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Date Range</label>
               <BaseSelect
                 v-model="dateRange"
@@ -97,7 +119,7 @@ const mockReports = ref([
               />
             </div>
 
-            <div class="flex flex-col gap-1.5 w-48">
+            <div class="flex flex-col gap-1.5 w-65">
               <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Warehouse</label>
               <BaseSelect
                 v-model="selectedWarehouse"
@@ -106,7 +128,7 @@ const mockReports = ref([
               />
             </div>
 
-            <div class="flex flex-col gap-1.5 w-56">
+            <div class="flex flex-col gap-1.5 w-65">
               <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Asset</label>
               <BaseSelect
                 v-model="selectedAsset"
@@ -118,7 +140,7 @@ const mockReports = ref([
           </div>
 
           <div class="self-end md:self-end pt-5">
-            <BaseButton color="brand">
+            <BaseButton color="brand" @click="exportExcel">
               <div class="flex items-center gap-2 px-1 py-0.5">
                 <i class="fas fa-file-excel text-sm"></i>
                 <span>Export Excel</span>
