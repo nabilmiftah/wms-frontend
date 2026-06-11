@@ -17,17 +17,21 @@ import WorkOrderDetailOutbound from "../pages/WorkOrderDetailOutbound.vue";
 const routes = [
   {
     path: "/",
+    path: "/",
     component: WelcomePage,
   },
   {
+    path: "/signin",
     path: "/signin",
     component: SignInPage,
   },
   {
     path: "/signup",
+    path: "/signup",
     component: SignUpPage,
   },
   {
+    path: "/dashboard",
     path: "/dashboard",
     component: DashboardPage,
   },
@@ -74,5 +78,9 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
 });
+  routes,
+});
+
+export default router;
 
 export default router;
