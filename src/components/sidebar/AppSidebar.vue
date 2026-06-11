@@ -153,6 +153,22 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
 
         <span v-if="!isCollapsed"> User </span>
       </RouterLink>
+      <RouterLink
+        to="/work-order"
+        @click.stop="emit('navigate')"
+        :class="[
+          route.path === '/work-order'
+            ? 'bg-white/15 text-white'
+            : 'text-white/70 hover:bg-white/10 hover:text-white',
+
+          isCollapsed ? 'justify-center' : '',
+        ]"
+        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
+      >
+        <Users class="w-5 h-5 shrink-0" />
+
+        <span v-if="!isCollapsed"> Work Order </span>
+      </RouterLink>
     </nav>
   </aside>
 </template>
