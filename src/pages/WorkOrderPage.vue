@@ -1,49 +1,50 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { Plus, Upload, Search, Eye } from "lucide-vue-next";
 import MainLayout from "../components/layouts/MainLayout.vue";
-import BaseButton from "../components/base/BaseButton.vue";
 import BaseInput from "../components/base/BaseInput.vue";
+import { toast } from "vue-sonner";
+import { getWorkOrders } from "../services/workorder.service.ts";
+import type { WorkOrder } from "../types/workorder.ts";
 
 const router = useRouter();
 
-type WOCategory = "INBOUND" | "OUTBOUND";
-type WOStatus = "TO_DO" | "ON_PROGRESS" | "DONE";
-
-interface WorkOrder {
-  id: string;
-  woNumber: string;
-  category: WOCategory;
-  warehouse: string;
-  storageBin: string;
-  assetName: string;
-  qty: number;
-  status: WOStatus;
-  createdAt: string;
-}
-
+const loading = ref(false);
 const search = ref("");
-const filterCategory = ref<WOCategory | "">("");
-const filterStatus = ref<WOStatus | "">("");
+const filterType = ref<"INBOUND" | "OUTBOUND" | "">("");
+const filterStatus = ref<"TODO" | "ON_PROGRESS" | "DONE" | "">("");
 
-const workOrders = ref<WorkOrder[]>([
-  { id: "1", woNumber: "WO_IN_01", category: "INBOUND", warehouse: "Gudang Jogja", storageBin: "WH_01_001", assetName: "Nike Journey Run Road Running Shoes - Black", qty: 10, status: "TO_DO", createdAt: "10 Apr 2026 07:00" },
-  { id: "2", woNumber: "WO_IN_02", category: "INBOUND", warehouse: "Gudang Jogja", storageBin: "WH_01_001", assetName: "Nike Journey Run Road Running Shoes - Black", qty: 15, status: "DONE", createdAt: "09 Apr 2026 15:30" },
-  { id: "3", woNumber: "WO_OUT_01", category: "OUTBOUND", warehouse: "Gudang Jogja", storageBin: "WH_01_001", assetName: "Nike Journey Run Road Running Shoes - Black", qty: 5, status: "ON_PROGRESS", createdAt: "10 Apr 2026 08:15" },
-  { id: "4", woNumber: "WO_OUT_02", category: "OUTBOUND", warehouse: "Gudang Bandung", storageBin: "WH_02_012", assetName: "Puma Velocity Nitro 2 - White", qty: 20, status: "TO_DO", createdAt: "08 Apr 2026 11:20" },
-  { id: "5", woNumber: "WO_IN_03", category: "INBOUND", warehouse: "Gudang Bandung", storageBin: "WH_02_005", assetName: "Adidas Ultraboost 22 - White", qty: 8, status: "ON_PROGRESS", createdAt: "07 Apr 2026 09:00" },
-  { id: "6", woNumber: "WO_OUT_03", category: "OUTBOUND", warehouse: "Gudang Jakarta", storageBin: "WH_03_002", assetName: "New Balance 574 - Navy", qty: 12, status: "DONE", createdAt: "06 Apr 2026 14:00" },
-]);
+const workOrders = ref<WorkOrder[]>([]);
+
+const fetchWorkOrders = async () => {
+  try {
+    loading.value = true;
+
+    const response = await getWorkOrders();
+
+    workOrders.value = response.data;
+  } catch (error: any) {
+    console.error(error);
+
+    toast.error("Failed to fetch work orders");
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchWorkOrders();
+});
 
 const totalWO = computed(() => workOrders.value.length);
 
 const activeInbound = computed(
-  () => workOrders.value.filter((wo) => wo.category === "INBOUND" && wo.status !== "DONE").length
+  () => workOrders.value.filter((wo) => wo.type === "INBOUND" && wo.status !== "DONE").length
 );
 
 const activeOutbound = computed(
-  () => workOrders.value.filter((wo) => wo.category === "OUTBOUND" && wo.status !== "DONE").length
+  () => workOrders.value.filter((wo) => wo.type === "OUTBOUND" && wo.status !== "DONE").length
 );
 
 const filteredWO = computed(() => {
@@ -52,42 +53,42 @@ const filteredWO = computed(() => {
 
     const matchSearch =
       wo.woNumber.toLowerCase().includes(keyword) ||
-      wo.warehouse.toLowerCase().includes(keyword) ||
-      wo.storageBin.toLowerCase().includes(keyword) ||
-      wo.assetName.toLowerCase().includes(keyword);
+      (wo.warehouse?.whName ?? "").toLowerCase().includes(keyword) ||
+      (wo.storageBin?.binAddress ?? "").toLowerCase().includes(keyword) ||
+      (wo.asset?.assetName ?? "").toLowerCase().includes(keyword);
 
-    const matchCategory = filterCategory.value ? wo.category === filterCategory.value : true;
+    const matchType = filterType.value ? wo.type === filterType.value : true;
 
     const matchStatus = filterStatus.value ? wo.status === filterStatus.value : true;
 
-    return matchSearch && matchCategory && matchStatus;
+    return matchSearch && matchType && matchStatus;
   });
 });
 
-const getCategoryClass = (category: WOCategory) => {
-  return category === "INBOUND"
+const getCategoryClass = (type: string) => {
+  return type === "INBOUND"
     ? "bg-blue-100 text-blue-700"
     : "bg-orange-100 text-orange-700";
 };
 
-const getCategoryLabel = (category: WOCategory) => {
-  return category === "INBOUND" ? "Inbound" : "Outbound";
+const getCategoryLabel = (type: string) => {
+  return type === "INBOUND" ? "Inbound" : "Outbound";
 };
 
-const getStatusClass = (status: WOStatus) => {
-  if (status === "TO_DO") return "bg-yellow-100 text-yellow-700";
+const getStatusClass = (status: string) => {
+  if (status === "TODO") return "bg-yellow-100 text-yellow-700";
   if (status === "ON_PROGRESS") return "bg-orange-100 text-orange-700";
   return "bg-green-100 text-green-700";
 };
 
-const getStatusLabel = (status: WOStatus) => {
-  if (status === "TO_DO") return "To-Do";
+const getStatusLabel = (status: string) => {
+  if (status === "TODO") return "To-Do";
   if (status === "ON_PROGRESS") return "On Progress";
   return "Done";
 };
 
 const goToDetail = (wo: WorkOrder) => {
-  if (wo.category === "INBOUND") {
+  if (wo.type === "INBOUND") {
     router.push(`/work-order/${wo.id}/inbound`);
   } else {
     router.push(`/work-order/${wo.id}/outbound`);
@@ -127,7 +128,6 @@ const goToDetail = (wo: WorkOrder) => {
           <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
             <p class="text-sm text-gray-500 font-medium">Total Work Orders</p>
             <p class="text-4xl font-bold text-gray-900 mt-1">{{ totalWO.toLocaleString() }}</p>
-            <p class="text-xs text-green-600 font-medium mt-1">↑ 12% vs bulan lalu</p>
           </div>
           <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
             <p class="text-sm text-gray-500 font-medium">Active Inbound</p>
@@ -154,7 +154,7 @@ const goToDetail = (wo: WorkOrder) => {
             </div>
             <div class="flex items-center gap-2">
               <select
-                v-model="filterCategory"
+                v-model="filterType"
                 class="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white outline-none cursor-pointer"
               >
                 <option value="">Semua Kategori</option>
@@ -166,7 +166,7 @@ const goToDetail = (wo: WorkOrder) => {
                 class="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white outline-none cursor-pointer"
               >
                 <option value="">Semua Status</option>
-                <option value="TO_DO">To-Do</option>
+                <option value="TODO">To-Do</option>
                 <option value="ON_PROGRESS">On Progress</option>
                 <option value="DONE">Done</option>
               </select>
@@ -188,47 +188,55 @@ const goToDetail = (wo: WorkOrder) => {
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="wo in filteredWO"
-                  :key="wo.id"
-                  class="border-t border-gray-100 hover:bg-gray-50 transition"
-                >
-                  <td class="px-4 py-3 whitespace-nowrap">
-                    <p class="font-semibold text-gray-900">{{ wo.woNumber }}</p>
-                    <p class="text-xs text-gray-400 mt-0.5">{{ wo.createdAt }}</p>
-                  </td>
-                  <td class="px-4 py-3 whitespace-nowrap">
-                    <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', getCategoryClass(wo.category)]">
-                      {{ getCategoryLabel(wo.category) }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-gray-600 whitespace-nowrap">{{ wo.warehouse }}</td>
-                  <td class="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{{ wo.storageBin }}</td>
-                  <td class="px-4 py-3 text-gray-700 max-w-[220px]">
-                    <p class="truncate">{{ wo.assetName }}</p>
-                  </td>
-                  <td class="px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">{{ wo.qty }}</td>
-                  <td class="px-4 py-3 whitespace-nowrap">
-                    <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', getStatusClass(wo.status)]">
-                      {{ getStatusLabel(wo.status) }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-center whitespace-nowrap">
-                    <button
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[#004AC6] text-xs font-semibold rounded-lg hover:bg-blue-50 transition"
-                      @click="goToDetail(wo)"
-                    >
-                      <Eye class="w-3.5 h-3.5" />
-                      Detail
-                    </button>
-                  </td>
+                <tr v-if="loading">
+                  <td colspan="8" class="text-center py-10 text-gray-400">Loading...</td>
                 </tr>
 
-                <tr v-if="filteredWO.length === 0">
-                  <td colspan="8" class="text-center py-10 text-gray-400">
-                    No work order found
-                  </td>
-                </tr>
+                <template v-else>
+                  <tr
+                    v-for="wo in filteredWO"
+                    :key="wo.id"
+                    class="border-t border-gray-100 hover:bg-gray-50 transition"
+                  >
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <p class="font-semibold text-gray-900">{{ wo.woNumber }}</p>
+                      <p class="text-xs text-gray-400 mt-0.5">
+                        {{ new Date(wo.createdAt).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) }}
+                      </p>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', getCategoryClass(wo.type)]">
+                        {{ getCategoryLabel(wo.type) }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600 whitespace-nowrap">{{ wo.warehouse?.whName || "-" }}</td>
+                    <td class="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{{ wo.storageBin?.binAddress || "-" }}</td>
+                    <td class="px-4 py-3 text-gray-700">
+                      <p class="truncate max-w-[220px]">{{ wo.asset?.assetName || "-" }}</p>
+                    </td>
+                    <td class="px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">{{ wo.quantity }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold', getStatusClass(wo.status)]">
+                        {{ getStatusLabel(wo.status) }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                      <button
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[#004AC6] text-xs font-semibold rounded-lg hover:bg-blue-50 transition"
+                        @click="goToDetail(wo)"
+                      >
+                        <Eye class="w-3.5 h-3.5" />
+                        Detail
+                      </button>
+                    </td>
+                  </tr>
+
+                  <tr v-if="filteredWO.length === 0 && !loading">
+                    <td colspan="8" class="text-center py-10 text-gray-400">
+                      No work order found
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>

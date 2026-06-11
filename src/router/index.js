@@ -12,26 +12,23 @@ import WorkOrderPage from "../pages/WorkOrderPage.vue";
 import CreateWorkOrder from "../pages/CreateWorkOrder.vue";
 import WorkOrderDetailInbound from "../pages/WorkOrderDetailInbound.vue";
 import WorkOrderDetailOutbound from "../pages/WorkOrderDetailOutbound.vue";
-
+import ReportPage from "../pages/ReportPage.vue";
+import AnalyticsPage from "../pages/AnalyticsPage.vue";
 
 const routes = [
   {
-    path: "/",
     path: "/",
     component: WelcomePage,
   },
   {
     path: "/signin",
-    path: "/signin",
     component: SignInPage,
   },
   {
     path: "/signup",
-    path: "/signup",
     component: SignUpPage,
   },
   {
-    path: "/dashboard",
     path: "/dashboard",
     component: DashboardPage,
   },
@@ -68,19 +65,24 @@ const routes = [
     path: "/work-order/:id/inbound",
     component: WorkOrderDetailInbound,
   },
-    {
+  {
     path: "/work-order/:id/outbound",
     component: WorkOrderDetailOutbound,
   },
+  { 
+    path: "/report",
+    component: ReportPage,
+  },
+  {
+    path: "/analytics",
+    component: AnalyticsPage,
+  },
+
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
 });
-  routes,
-});
-
-export default router;
 
 export default router;

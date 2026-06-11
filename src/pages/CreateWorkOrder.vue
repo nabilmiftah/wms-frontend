@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ArrowLeft } from "lucide-vue-next";
 import MainLayout from "../components/layouts/MainLayout.vue";
@@ -7,6 +7,13 @@ import BaseInput from "../components/base/BaseInput.vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
 import BaseButton from "../components/base/BaseButton.vue";
 import { toast } from "vue-sonner";
+import { createWorkOrder } from "../services/workorder.service.ts";
+import { getWarehouses } from "../services/warehouse.service";
+import { getStorageBins } from "../services/storage-bin.service.ts";
+import { getAssets } from "../services/asset.service";
+import type { Warehouse } from "../types/warehouse";
+import type { StorageBin } from "../types/storage-bin.ts";
+import type { Asset } from "../types/asset";
 
 const props = defineProps<{ type: "inbound" | "outbound" }>();
 
@@ -16,7 +23,6 @@ const isInbound = computed(() => props.type === "inbound");
 
 const loading = ref(false);
 
-const woNumber = ref(isInbound.value ? "WO_IN_07" : "WO_OUT_05");
 const warehouseId = ref("");
 const storageBinId = ref("");
 const assetId = ref("");
@@ -28,58 +34,66 @@ const storageBinError = ref("");
 const assetError = ref("");
 const qtyError = ref("");
 
-// ─── Dummy Data (ganti dengan API saat BE siap) ───────────────────────────
-const warehouses = ref([
-  { id: "wh1", name: "Gudang Jogja" },
-  { id: "wh2", name: "Gudang Bandung" },
-  { id: "wh3", name: "Gudang Jakarta" },
-]);
+const warehouses = ref<Warehouse[]>([]);
+const storageBins = ref<StorageBin[]>([]);
+const assets = ref<Asset[]>([]);
 
-const allStorageBins = ref([
-  { id: "sb1", address: "WH_01_001", warehouseId: "wh1" },
-  { id: "sb2", address: "WH_01_002", warehouseId: "wh1" },
-  { id: "sb3", address: "WH_01_003", warehouseId: "wh1" },
-  { id: "sb4", address: "WH_02_001", warehouseId: "wh2" },
-  { id: "sb5", address: "WH_02_012", warehouseId: "wh2" },
-  { id: "sb6", address: "WH_03_002", warehouseId: "wh3" },
-]);
+const fetchWarehouses = async () => {
+  try {
+    const response = await getWarehouses();
+    warehouses.value = response.data;
+  } catch (error: any) {
+    console.error(error);
+  }
+};
 
-const allAssets = ref([
-  { id: "a1", name: "Nike Journey Run Road Running Shoes - Black", storageBinId: "sb1" },
-  { id: "a2", name: "Adidas Ultraboost 22 - White", storageBinId: "sb2" },
-  { id: "a3", name: "Puma Velocity Nitro 2 - Grey", storageBinId: "sb3" },
-  { id: "a4", name: "Puma Velocity Nitro 2 - White", storageBinId: "sb5" },
-  { id: "a5", name: "New Balance 574 - Navy", storageBinId: "sb6" },
-]);
+const fetchStorageBins = async (whId: string) => {
+  try {
+    const response = await getStorageBins();
+    storageBins.value = response.data.filter((sb: StorageBin) => sb.warehouseId === whId);
+  } catch (error: any) {
+    console.error(error);
+  }
+};
 
-const filteredStorageBins = computed(() =>
-  allStorageBins.value.filter((sb) => sb.warehouseId === warehouseId.value)
-);
+const fetchAssets = async (sbId: string) => {
+  try {
+    const response = await getAssets();
+    assets.value = response.data.filter((a: Asset) => a.storageBinId === sbId);
+  } catch (error: any) {
+    console.error(error);
+  }
+};
 
-const filteredAssets = computed(() =>
-  allAssets.value.filter((a) => a.storageBinId === storageBinId.value)
-);
+onMounted(() => {
+  fetchWarehouses();
+});
+
+watch(warehouseId, (val) => {
+  storageBinId.value = "";
+  assetId.value = "";
+  storageBins.value = [];
+  assets.value = [];
+  if (val) fetchStorageBins(val);
+});
+
+watch(storageBinId, (val) => {
+  assetId.value = "";
+  assets.value = [];
+  if (val) fetchAssets(val);
+});
 
 const warehouseOptions = computed(() =>
-  warehouses.value.map((wh) => ({ label: wh.name, value: wh.id }))
+  warehouses.value.map((wh) => ({ label: wh.whName, value: wh.id }))
 );
 
 const storageBinOptions = computed(() =>
-  filteredStorageBins.value.map((sb) => ({ label: sb.address, value: sb.id }))
+  storageBins.value.map((sb) => ({ label: sb.binAddress, value: sb.id }))
 );
 
 const assetOptions = computed(() =>
-  filteredAssets.value.map((a) => ({ label: a.name, value: a.id }))
+  assets.value.map((a) => ({ label: `${a.assetNumber} — ${a.assetName}`, value: a.id }))
 );
-
-watch(warehouseId, () => {
-  storageBinId.value = "";
-  assetId.value = "";
-});
-
-watch(storageBinId, () => {
-  assetId.value = "";
-});
 
 const saveWorkOrder = async () => {
   warehouseError.value = "";
@@ -110,39 +124,23 @@ const saveWorkOrder = async () => {
   try {
     loading.value = true;
 
-    // TODO: panggil API create WO saat BE siap
-    console.log("Submit WO:", {
-      woNumber: woNumber.value,
-      type: props.type,
+    const response = await createWorkOrder({
+      type: props.type.toUpperCase() as "INBOUND" | "OUTBOUND",
       warehouseId: warehouseId.value,
       storageBinId: storageBinId.value,
       assetId: assetId.value,
-      qty: Number(qty.value),
-      remarks: remarks.value,
+      quantity: qty.value,
+      remarks: remarks.value || undefined,
     });
+
+    const newWO = response.data;
 
     toast.success("Work Order berhasil dibuat");
 
-    // Simpan data WO ke localStorage sementara sampai BE siap
-    const selectedWarehouse = warehouses.value.find((w) => w.id === warehouseId.value);
-    const selectedStorageBin = allStorageBins.value.find((s) => s.id === storageBinId.value);
-    const selectedAsset = allAssets.value.find((a) => a.id === assetId.value);
-
-    const woData = {
-      woNumber: woNumber.value,
-      warehouse: selectedWarehouse?.name || "",
-      storageBin: selectedStorageBin?.address || "",
-      assetName: selectedAsset?.name || "",
-      targetQty: qty.value,
-      remarks: remarks.value,
-    };
-
-    localStorage.setItem("currentWO", JSON.stringify(woData));
-
     if (props.type === "inbound") {
-      router.push("/work-order/1/inbound");
+      router.push(`/work-order/${newWO.id}/inbound`);
     } else {
-      router.push("/work-order/3/outbound");
+      router.push(`/work-order/${newWO.id}/outbound`);
     }
   } catch (error: any) {
     console.error(error);
@@ -151,18 +149,6 @@ const saveWorkOrder = async () => {
   } finally {
     loading.value = false;
   }
-};
-
-const resetForm = () => {
-  warehouseId.value = "";
-  storageBinId.value = "";
-  assetId.value = "";
-  qty.value = null;
-  remarks.value = "";
-  warehouseError.value = "";
-  storageBinError.value = "";
-  assetError.value = "";
-  qtyError.value = "";
 };
 </script>
 
@@ -200,15 +186,15 @@ const resetForm = () => {
           <div class="p-6 space-y-5">
             <div class="grid grid-cols-2 gap-5">
               <div>
+                <label class="text-sm font-medium text-[#434655] block mb-2">WO Category</label>
+                <BaseInput :model-value="isInbound ? 'Inbound' : 'Outbound'" disabled />
+              </div>
+              <div>
                 <label class="text-sm font-medium text-[#434655] block mb-2">WO Number</label>
-                <BaseInput v-model="woNumber" disabled placeholder="Auto Generated" />
+                <BaseInput model-value="Auto Generated" disabled />
                 <label class="text-xs font-medium text-[#434655] block mt-1 italic">
                   Auto-generated by system
                 </label>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-[#434655] block mb-2">WO Category</label>
-                <BaseInput :model-value="isInbound ? 'Inbound' : 'Outbound'" disabled />
               </div>
             </div>
 

@@ -1,354 +1,426 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
-import { ArrowLeft, Scan, Printer, Trash2, Info } from "lucide-vue-next";
+import { useRouter, useRoute } from "vue-router";
+import { ArrowLeft, Trash2 } from "lucide-vue-next";
 import MainLayout from "../components/layouts/MainLayout.vue";
 import BaseButton from "../components/base/BaseButton.vue";
 import { toast } from "vue-sonner";
-
-interface ScanRecord {
-  id: string;
-  labelCode: string;
-  scannedAt: string;
-  scannedBy: string;
-}
+import { getWorkOrderById, generateLabels, updateWorkOrderStatus } from "../services/workorder.service.ts";
+import { scanInbound, printLabelPdf } from "../services/assetlabel.service.ts";
+import type { WorkOrder, ScanRecord } from "../types/workorder.ts";
 
 const router = useRouter();
+const route = useRoute();
 
 const loading = ref(false);
-
+const scanning = ref(false);
 const labelInput = ref("");
+const wo = ref<WorkOrder | null>(null);
+const scanHistory = ref<ScanRecord[]>([]);
+const generatedLabels = ref<string[]>([]);
+const sessionScans = ref<Set<string>>(new Set());
+const prevLabelCount = ref(0);
 
-const wo = ref({
-  woNumber: "WO_IN_01",
-  category: "INBOUND",
-  warehouse: "Gudang Jogja",
-  storageBin: "WH_01_001",
-  assetName: "Nike Journey Run Road Running Shoes - Black",
-  targetQty: 10,
-});
+const woId = computed(() => route.params.id as string);
+const scanned = computed(() => scanHistory.value.length);
+const targetQty = computed(() => wo.value?.quantity ?? 0);
+const remaining = computed(() => targetQty.value - scanned.value);
+const progressPercent = computed(() =>
+  targetQty.value > 0 ? Math.round((scanned.value / targetQty.value) * 100) : 0
+);
+const isDone = computed(() => scanned.value >= targetQty.value);
+
+const fetchWorkOrder = async () => {
+  try {
+    loading.value = true;
+    const response = await getWorkOrderById(woId.value);
+    wo.value = response.data;
+
+    if (response.data.labels && Array.isArray(response.data.labels)) {
+      const allLabels = response.data.labels;
+      const totalLabelCount = allLabels.length;
+
+      // Labels yang sudah di-scan sebelumnya (pasti ada inboundAt)
+      const scannedLabelsCodes = new Set(scanHistory.value.map(s => s.labelCode));
+
+      // Separate scanned vs generated
+      const scanned = allLabels.filter((l: any) => l.inboundAt !== null);
+      const unscanned = allLabels.filter((l: any) => l.inboundAt === null);
+
+      // Labels yang newly added = total sekarang > previous count
+      const hasNewLabels = totalLabelCount > prevLabelCount.value;
+
+      // Update scan history dari backend
+      scanHistory.value = scanned.map((l: any) => ({
+        id: l.id,
+        labelCode: l.labelCode,
+        scannedAt: new Date(l.inboundAt).toLocaleString("id-ID", {
+          day: "2-digit", month: "2-digit", year: "numeric",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hour12: false,
+        }).replace(/\//g, "-"),
+        scannedBy: l.scannedBy?.userName || "System",
+      }));
+
+      // Generated labels = unscanned + newly generated ones (even if backend set inboundAt)
+      if (hasNewLabels) {
+        // Ada label baru, add those yang belum di-scan
+        const newGeneratedCodes = unscanned
+          .map((l: any) => l.labelCode)
+          .filter((code: string) => !scannedLabelsCodes.has(code));
+
+        generatedLabels.value = [...generatedLabels.value, ...newGeneratedCodes];
+      } else {
+        // Tidak ada label baru, just update dari unscanned
+        generatedLabels.value = unscanned.map((l: any) => l.labelCode);
+      }
+
+      generatedLabels.value = [...new Set(generatedLabels.value)].sort();
+      prevLabelCount.value = totalLabelCount;
+      sessionScans.value.clear();
+    }
+  } catch (error: any) {
+    console.error("fetchWorkOrder error:", error);
+    toast.error(error?.response?.data?.message || "Gagal fetch work order");
+  } finally {
+    loading.value = false;
+  }
+};
 
 onMounted(() => {
-  const saved = localStorage.getItem("currentWO");
-
-  if (saved) {
-    const data = JSON.parse(saved);
-
-    wo.value.woNumber = data.woNumber || wo.value.woNumber;
-    wo.value.warehouse = data.warehouse || wo.value.warehouse;
-    wo.value.storageBin = data.storageBin || wo.value.storageBin;
-    wo.value.assetName = data.assetName || wo.value.assetName;
-    wo.value.targetQty = data.targetQty || wo.value.targetQty;
-  }
+  fetchWorkOrder();
 });
 
-const scanHistory = ref<ScanRecord[]>([]);
+const handleScan = async () => {
+  const code = labelInput.value.trim().toUpperCase();
 
-const scanned = computed(() => scanHistory.value.length);
-
-const remaining = computed(() => wo.value.targetQty - scanned.value);
-
-const progressPercent = computed(() =>
-  Math.round((scanned.value / wo.value.targetQty) * 100)
-);
-
-const isDone = computed(() => scanned.value >= wo.value.targetQty);
-
-const handleScan = () => {
-  const code = labelInput.value.trim();
-
-  if (!code) return;
-
-  if (scanHistory.value.find((s) => s.labelCode === code)) {
-    toast.error("Label sudah pernah di-scan sebelumnya");
+  if (!code) {
+    toast.error("Masukkan label code");
     return;
   }
 
-  if (scanned.value >= wo.value.targetQty) {
+  if (sessionScans.value.has(code)) {
+    toast.error("Label sudah di-scan dalam sesi ini");
+    return;
+  }
+
+  if (scanned.value >= targetQty.value) {
     toast.error("Jumlah scan sudah mencapai target qty");
     return;
   }
 
-  const now = new Date();
+  if (!generatedLabels.value.includes(code)) {
+    toast.error("Label tidak ditemukan atau belum di-generate");
+    return;
+  }
 
-  const formatted = now
-    .toLocaleString("id-ID", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    })
-    .replace(/\//g, "-");
+  try {
+    scanning.value = true;
 
-  scanHistory.value.push({
-    id: Date.now().toString(),
-    labelCode: code,
-    scannedAt: formatted,
-    scannedBy: "Current User",
-  });
+    // Payload sesuai backend documentation: {labelCode, workOrderId}
+    const response = await scanInbound({
+      labelCode: code,
+      workOrderId: woId.value,
+    });
 
-  labelInput.value = "";
+    const now = new Date();
+    const formatted = now
+      .toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      })
+      .replace(/\//g, "-");
 
-  toast.success(`Label ${code} berhasil di-scan`);
+    // Tambah ke scan history
+    scanHistory.value.push({
+      id: response.data?.id || Date.now().toString(),
+      labelCode: code,
+      scannedAt: formatted,
+      scannedBy: response.data?.scannedBy?.userName || "Current User",
+    });
+
+    // Remove dari generated labels
+    generatedLabels.value = generatedLabels.value.filter((l) => l !== code);
+    sessionScans.value.add(code);
+    labelInput.value = "";
+
+    toast.success(`Label ${code} berhasil di-scan`);
+  } catch (error: any) {
+    console.error("Scan error:", error);
+    const message = error?.response?.data?.message || "Gagal scan label";
+    toast.error(message);
+  } finally {
+    scanning.value = false;
+  }
 };
 
-const handleDelete = (id: string) => {
-  scanHistory.value = scanHistory.value.filter((s) => s.id !== id);
+const handleGenerateLabels = async () => {
+  try {
+    loading.value = true;
+    await generateLabels(woId.value);
+    toast.success("Labels berhasil di-generate");
 
-  toast.success("Label berhasil dihapus");
+    // Fetch untuk get actual label codes dari backend
+    await fetchWorkOrder();
+  } catch (error: any) {
+    console.error("Generate error:", error);
+    toast.error(error?.response?.data?.message || "Gagal generate labels");
+  } finally {
+    loading.value = false;
+  }
 };
 
 const handlePrintLabel = () => {
-  if (!scanHistory.value.length) {
-    toast.error("Belum ada label yang di-scan untuk di-print");
+  if (scanHistory.value.length === 0) {
+    toast.error("Tidak ada label yang sudah di-scan untuk di-print");
     return;
   }
-
-  const labelCards = scanHistory.value
-    .map(
-      (record) => `
-    <div class="label-card">
-      <div class="label-top">
-        <div class="label-info">
-          <div class="asset-number">AST_01</div>
-          <div class="asset-name">${wo.value.assetName}</div>
-          <div class="price">Rp. 0</div>
-        </div>
-        <div class="qr-section">
-          <div class="label-number-text">${record.labelCode}</div>
-          <div class="qr-placeholder">QR</div>
-        </div>
-      </div>
-      <div class="label-bottom">
-        <span class="brand">WMS Solution</span>
-        <span class="supplier">-</span>
-      </div>
-    </div>
-  `
-    )
-    .join("");
-
-  const html = `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Print Label</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background: white; }
-    .page { width: 210mm; min-height: 297mm; padding: 2.7cm 2cm 3cm 2cm; background: white; }
-    .label-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1cm; }
-    .label-card { border: 1.5px solid #000; border-radius: 4px; padding: 10px 12px 8px 12px; display: flex; flex-direction: column; justify-content: space-between; min-height: 95px; page-break-inside: avoid; }
-    .label-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-    .label-info { flex: 1; min-width: 0; }
-    .asset-number { font-size: 8pt; color: #333; margin-bottom: 2px; }
-    .asset-name { font-size: 11pt; font-weight: bold; color: #000; line-height: 1.3; margin-bottom: 6px; word-break: break-word; }
-    .price { font-size: 8pt; color: #333; }
-    .qr-section { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
-    .label-number-text { font-size: 6pt; color: #333; margin-bottom: 2px; font-family: monospace; text-align: right; }
-    .qr-placeholder { width: 80px; height: 80px; border: 1px solid #000; display: flex; align-items: center; justify-content: center; font-size: 10pt; font-weight: bold; color: #999; }
-    .label-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 5px; border-top: 0.5px solid #ccc; }
-    .brand { font-size: 7pt; color: #444; }
-    .supplier { font-size: 7pt; color: #444; text-align: right; }
-    @media print { body { margin: 0; } .page { width: 210mm; padding: 2.7cm 2cm 3cm 2cm; } .label-card { page-break-inside: avoid; } }
-  </style>
-</head>
-<body>
-  <div class="page"><div class="label-grid">${labelCards}</div></div>
-  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script>
-</body>
-</html>`;
-
-  const printWindow = window.open("", "_blank", "width=900,height=700");
-
-  if (!printWindow) {
-    toast.error("Pop-up diblokir browser. Izinkan pop-up untuk Print Label.");
-    return;
-  }
-
-  printWindow.document.write(html);
-
-  printWindow.document.close();
+  printLabelPdf(woId.value);
 };
 
-const handleFinish = () => {
+const handleDeleteScan = (record: ScanRecord) => {
+  try {
+    const index = scanHistory.value.findIndex(r => r.id === record.id);
+    if (index > -1) {
+      const deleted = scanHistory.value.splice(index, 1)[0];
+      sessionScans.value.delete(deleted.labelCode);
+
+      // Add back to generated labels
+      generatedLabels.value.push(deleted.labelCode);
+      generatedLabels.value.sort();
+
+      toast.success("Scan berhasil dihapus");
+    }
+  } catch (error) {
+    console.error("Delete error:", error);
+    toast.error("Gagal menghapus scan");
+  }
+};
+
+const handleFinish = async () => {
   if (!isDone.value) {
-    toast.error("Scan belum selesai, qty belum terpenuhi");
+    toast.error(`Scan belum selesai. Butuh ${remaining.value} label lagi`);
     return;
   }
 
-  // TODO: call API selesaikan WO
-  toast.success("Work Order berhasil diselesaikan!");
+  if (!wo.value) {
+    toast.error("Work Order tidak ditemukan");
+    return;
+  }
 
-  router.push("/work-order");
+  try {
+    loading.value = true;
+    await updateWorkOrderStatus(wo.value.id, "DONE");
+    toast.success("Work Order berhasil diselesaikan!");
+    router.push("/work-order");
+  } catch (error: any) {
+    console.error("Finish error:", error);
+    toast.error(error?.response?.data?.message || "Gagal menyelesaikan Work Order");
+  } finally {
+    loading.value = false;
+  }
 };
 </script>
 
 <template>
   <MainLayout>
-    <div class="flex min-h-screen bg-[#f5f7fb]">
-      <main class="flex-1 p-8 space-y-5 overflow-auto">
-
-        <div class="flex items-center justify-between">
+    <div class="flex min-h-screen bg-gray-50">
+      <main class="flex-1 p-8 overflow-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
           <button
-            class="flex items-center gap-2 text-base font-bold text-gray-900 hover:text-[#004AC6] transition"
+            class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition"
             @click="router.push('/work-order')"
           >
-            <ArrowLeft class="w-4 h-4" />
-            Detail Process Work Order (Inbound)
+            <ArrowLeft class="w-5 h-5" />
+            <span class="text-sm font-medium">Detail Process Work Order (Inbound)</span>
           </button>
-          <div class="flex items-center gap-2">
-            <span class="px-3 py-1 bg-gray-100 border border-gray-200 rounded-full text-sm font-semibold text-gray-700">
-              {{ wo.woNumber }}
+          <div class="flex items-center gap-3">
+            <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-semibold">
+              {{ wo?.woNumber || "-" }}
             </span>
-            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold tracking-wide">
+            <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
               INBOUND
             </span>
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-          <div class="flex items-center gap-0">
-            <div class="pr-6">
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">TARGET QTY</p>
-              <p class="text-4xl font-bold text-gray-900 mt-1">{{ wo.targetQty }}</p>
-            </div>
-            <div class="w-px h-10 bg-gray-200 mx-2" />
-            <div class="px-6">
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">SCANNED</p>
-              <p class="text-4xl font-bold text-[#004AC6] mt-1">{{ scanned }}</p>
-            </div>
-            <div class="w-px h-10 bg-gray-200 mx-2" />
-            <div class="px-6">
-              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">SISA QTY</p>
-              <p class="text-4xl font-bold text-red-600 mt-1">{{ remaining }}</p>
-            </div>
-            <div class="w-px h-10 bg-gray-200 mx-2" />
-            <div class="flex-1 px-6">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500">{{ scanned }} / {{ wo.targetQty }} label ter-scan</span>
-                <span class="text-sm font-bold text-[#004AC6]">{{ progressPercent }}%</span>
-              </div>
-              <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-[#004AC6] rounded-full transition-all duration-300"
-                  :style="{ width: progressPercent + '%' }"
-                />
-              </div>
-            </div>
-          </div>
+        <div v-if="loading" class="flex justify-center py-12">
+          <p class="text-gray-400">Loading...</p>
         </div>
 
-        <div class="bg-white rounded-2xl px-6 py-4 shadow-sm border border-gray-200 flex items-center gap-8">
-          <div>
-            <p class="text-xs text-gray-400 font-medium">Warehouse</p>
-            <p class="text-sm font-semibold text-gray-900 mt-0.5">{{ wo.warehouse }}</p>
+        <template v-else-if="wo">
+          <!-- Stats Row -->
+          <div class="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+            <div class="grid grid-cols-4 gap-8">
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target QTY</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1">{{ targetQty }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scanned</p>
+                <p class="text-3xl font-bold text-blue-600 mt-1">{{ scanned }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sisa QTY</p>
+                <p class="text-3xl font-bold text-orange-600 mt-1">{{ remaining }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Progress</p>
+                <div class="mt-2">
+                  <div class="flex items-center gap-2 mb-1">
+                    <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        class="h-full bg-blue-600 transition-all duration-300"
+                        :style="{ width: progressPercent + '%' }"
+                      />
+                    </div>
+                    <span class="text-sm font-bold text-blue-600">{{ progressPercent }}%</span>
+                  </div>
+                  <p class="text-xs text-gray-400">{{ scanned }} / {{ targetQty }} label ter-scan</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <p class="text-xs text-gray-400 font-medium">Storage Bin</p>
-            <p class="text-sm font-semibold text-gray-900 font-mono mt-0.5">{{ wo.storageBin }}</p>
-          </div>
-          <div>
-            <p class="text-xs text-gray-400 font-medium">Asset</p>
-            <p class="text-sm font-semibold text-gray-900 mt-0.5">{{ wo.assetName }}</p>
-          </div>
-        </div>
 
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-4">
-          <p class="text-base font-semibold text-gray-900">Input Scan Label</p>
+          <!-- Info Row -->
+          <div class="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+            <div class="grid grid-cols-3 gap-8">
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Warehouse</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1">{{ wo.warehouse?.whName || "-" }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Storage Bin</p>
+                <p class="text-sm font-mono font-semibold text-gray-900 mt-1">{{ wo.storageBin?.binAddress || "-" }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Asset</p>
+                <p class="text-sm font-semibold text-gray-900 mt-1">{{ wo.asset?.assetName || "-" }}</p>
+              </div>
+            </div>
+          </div>
 
-          <div class="flex items-center gap-3">
-            <div class="relative flex-1">
-              <Scan class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <!-- Input Section -->
+          <div class="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+            <p class="text-sm font-semibold text-gray-900 mb-4">Input Scan Label</p>
+
+            <div class="flex gap-3 mb-4">
               <input
                 v-model="labelInput"
                 type="text"
                 placeholder="Masukkan atau scan label code..."
-                :disabled="isDone"
-                class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-[#004AC6] placeholder:text-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
+                :disabled="scanning"
+                class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 @keydown.enter="handleScan"
               />
+              <button
+                @click="handleScan"
+                :disabled="scanning || scanned >= targetQty"
+                class="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition"
+              >
+                {{ scanning ? "Scanning..." : "Scan" }}
+              </button>
+              <button
+                @click="handlePrintLabel"
+                :disabled="scanHistory.length === 0"
+                class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Print Label
+              </button>
+              <button
+                @click="handleGenerateLabels"
+                :disabled="generatedLabels.length > 0"
+                class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Generate Labels
+              </button>
             </div>
-            <button
-              :disabled="isDone"
-              class="px-5 py-2.5 bg-[#004AC6] text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="handleScan"
-            >
-              Scan
-            </button>
-            <button
-              class="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-50 transition"
-              @click="handlePrintLabel"
-            >
-              <Printer class="w-4 h-4" />
-              Print Label
-            </button>
-          </div>
 
-          <div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <div class="flex items-center gap-2 mb-1.5">
-              <Info class="w-4 h-4 text-blue-500 shrink-0" />
-              <span class="text-sm font-semibold text-blue-700">Aturan Scan Inbound:</span>
-            </div>
-            <ul class="list-disc list-inside space-y-0.5 pl-1">
-              <li class="text-sm text-blue-600">Tidak dapat duplicate scan</li>
-              <li class="text-sm text-blue-600">Tidak dapat scan melebihi jumlah qty WO</li>
-              <li class="text-sm text-blue-600">Label harus sesuai asset dan storage bin</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-4">
-          <p class="text-base font-semibold text-gray-900">Scan History</p>
-
-          <div class="overflow-hidden rounded-xl border border-gray-200">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100 text-gray-700">
-                <tr>
-                  <th class="text-left px-4 py-3 font-semibold">LABEL CODE</th>
-                  <th class="text-left px-4 py-3 font-semibold">SCANNED AT</th>
-                  <th class="text-left px-4 py-3 font-semibold">SCANNED BY</th>
-                  <th class="text-center px-4 py-3 font-semibold">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="record in scanHistory"
-                  :key="record.id"
-                  class="border-t border-gray-100 hover:bg-gray-50 transition"
+            <!-- Generated Labels Display -->
+            <div v-if="generatedLabels.length > 0" class="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+              <p class="text-xs font-semibold text-green-700 mb-2">📋 Label Tergenerate ({{ generatedLabels.length }}) — Siap untuk di-scan:</p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="label in generatedLabels"
+                  :key="label"
+                  class="inline-flex items-center px-3 py-1 bg-green-100 text-green-700 text-xs font-mono font-semibold rounded-lg"
                 >
-                  <td class="px-4 py-3 font-mono font-semibold text-gray-900">{{ record.labelCode }}</td>
-                  <td class="px-4 py-3 text-gray-600">{{ record.scannedAt }}</td>
-                  <td class="px-4 py-3 text-gray-600">{{ record.scannedBy }}</td>
-                  <td class="px-4 py-3 text-center">
-                    <button
-                      class="text-red-500 text-sm font-semibold hover:bg-red-50 px-2 py-1 rounded-lg transition"
-                      @click="handleDelete(record.id)"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                  {{ label }}
+                </span>
+              </div>
+            </div>
 
-                <tr v-if="scanHistory.length === 0">
-                  <td colspan="4" class="text-center py-8 text-gray-400">
-                    Belum ada label yang di-scan
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <p class="text-xs font-semibold text-blue-700 mb-2">ℹ️ Aturan Scan Inbound:</p>
+              <ul class="text-xs text-blue-600 space-y-1 ml-4 list-disc">
+                <li>Generate label terlebih dahulu</li>
+                <li>Scan label dengan urutan apapun</li>
+                <li>Tidak dapat duplicate scan dalam 1 sesi</li>
+                <li>Tidak dapat scan melebihi jumlah qty WO</li>
+              </ul>
+            </div>
           </div>
 
-          <div class="flex justify-end">
-            <BaseButton color="brand" :disabled="!isDone" @click="handleFinish">
-              Selesaikan Work Order
-            </BaseButton>
-          </div>
-        </div>
+          <!-- Scan History -->
+          <div class="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <p class="text-sm font-semibold text-gray-900 mb-4">Scan History</p>
 
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="border-b border-gray-200 bg-gray-50">
+                  <tr>
+                    <th class="text-left px-4 py-3 font-semibold text-gray-700">Label Code</th>
+                    <th class="text-left px-4 py-3 font-semibold text-gray-700">Scanned At</th>
+                    <th class="text-left px-4 py-3 font-semibold text-gray-700">Scanned By</th>
+                    <th class="text-left px-4 py-3 font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="record in scanHistory"
+                    :key="record.id"
+                    class="border-b border-gray-100 hover:bg-gray-50 transition"
+                  >
+                    <td class="px-4 py-3 font-mono font-semibold text-gray-900">{{ record.labelCode }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ record.scannedAt }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ record.scannedBy }}</td>
+                    <td class="px-4 py-3">
+                      <button
+                        @click="handleDeleteScan(record)"
+                        class="flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-sm transition"
+                      >
+                        <Trash2 class="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+
+                  <tr v-if="scanHistory.length === 0">
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-400">
+                      Belum ada label yang di-scan
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="flex justify-end mt-6">
+              <button
+                @click="handleFinish"
+                :disabled="!isDone || loading"
+                class="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition"
+              >
+                {{ loading ? "Processing..." : "Selesaikan Work Order" }}
+              </button>
+            </div>
+          </div>
+        </template>
       </main>
     </div>
   </MainLayout>

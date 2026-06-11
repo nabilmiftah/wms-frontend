@@ -1,59 +1,135 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import MainLayout from "../components/layouts/MainLayout.vue";
 import BaseSelect from "../components/base/BaseSelect.vue";
 import BaseButton from "../components/base/BaseButton.vue";
-import * as XLSX from "xlsx";
+import { getWarehouses } from "../services/warehouse.service";
+import { getAssets } from "../services/asset.service";
+import api from "../services/api";
+import { toast } from "vue-sonner";
+
+// ── Loading / Error State ─────────────────────────────────────
+const isLoading = ref(false);
+const isLoadingStock = ref(false);
+const error = ref<string | null>(null);
 
 // ── Filter State ──────────────────────────────────────────────
-const selectedWarehouse = ref("");
-const selectedStorageBin = ref("");
-const selectedPeriode = ref("April 2026");
+const selectedWarehouse = ref("all");
+const selectedStorageBin = ref("all");
 
-const warehouseOptions = [
-  { label: "Semua Warehouse", value: "" },
-  { label: "Gudang Jogja", value: "Gudang Jogja" },
-  { label: "Gudang Bandung", value: "Gudang Bandung" },
-];
+// Dynamic options from API
+const warehouseOptions = ref([{ label: "Semua Warehouse", value: "all" }]);
+const storageBinOptions = ref([{ label: "Semua Storage Bin", value: "all" }]);
 
-const storageBinOptions = [
-  { label: "Semua Storage Bin", value: "" },
-  { label: "WH_01_001", value: "WH_01_001" },
-  { label: "WH_01_002", value: "WH_01_002" },
-  { label: "WH_02_014", value: "WH_02_014" },
-];
+const fetchWarehouses = async () => {
+  try {
+    const response = await getWarehouses();
+    console.log("Raw warehouse response:", response);
+    const data = Array.isArray(response) ? response : response.data ?? [];
+    warehouseOptions.value = [
+      { label: "Semua Warehouse", value: "all" },
+      ...data.map((w: any) => ({ label: w.whName, value: w.id })),
+    ];
+    console.log("Warehouse options:", warehouseOptions.value);
+  } catch (e) {
+    console.error("Fetch warehouses error:", e);
+  }
+};
 
-const periodeOptions = [
-  { label: "April 2026", value: "April 2026" },
-  { label: "Maret 2026", value: "Maret 2026" },
-  { label: "Februari 2026", value: "Februari 2026" },
-];
+const fetchStorageBins = async (warehouseId?: string) => {
+  try {
+    let url = "/storage-bins";
+    if (warehouseId && warehouseId !== "all") {
+      url += `?warehouseId=${warehouseId}`;
+    }
+    const response = await api.get(url);
+    console.log("Raw storage bins response:", response);
+    const data = Array.isArray(response.data) ? response.data : response.data?.data ?? [];
+    storageBinOptions.value = [
+      { label: "Semua Storage Bin", value: "all" },
+      ...data.map((b: any) => ({ label: b.binAddress ?? b.binCode, value: b.id })),
+    ];
+    console.log("Storage bin options:", storageBinOptions.value);
+  } catch (e) {
+    console.error("Fetch storage bins error:", e);
+  }
+};
 
-// ── Summary Cards Data ────────────────────────────────────────
-const summaryCards = ref([
-  { label: "Total Asset Unique", value: "1.250", unit: "", badge: "+12%", badgeColor: "green" },
-  { label: "Total Quantity Stok", value: "12.500", unit: "pcs", badge: null, badgeColor: null },
-  { label: "Kapasitas Gudang", value: "85%", unit: "", badge: null, badgeColor: null, isProgress: true, progress: 85 },
-  { label: "Low Stock Alert", value: "12", unit: "Items", badge: null, badgeColor: null, isAlert: true },
-]);
+// Reset storage bin when warehouse changes
+watch(selectedWarehouse, (val) => {
+  selectedStorageBin.value = "all";
+  fetchStorageBins(val && val !== "all" ? val : undefined);
+});
 
-// ── Bar Chart Data ────────────────────────────────────────────
-const stockPerAsset = ref([
-  { name: "Nike Journey Run Road...", stock: 1200, max: 1200 },
-  { name: "Adidas Ultraboost", stock: 900, max: 1200 },
-  { name: "Puma Velocity", stock: 600, max: 1200 },
-  { name: "Reebok Nano X", stock: 300, max: 1200 },
-]);
+// ── Analytics (Summary Cards + Kategori) ─────────────────────
+interface AnalyticsResponse {
+  totalAsset: number;
+  totalStock: number;
+  perCategory: Array<{ category: string; totalStock: number; totalAsset: number }> | Record<string, number>;
+  detail: DetailItem[];
+}
 
-// ── Donut Chart Data ──────────────────────────────────────────
-const kategoriData = ref([
-  { label: "Footwear", value: 70, color: "#3B6FE8" },
-  { label: "Apparel", value: 30, color: "#34C98A" },
-]);
+interface DetailItem {
+  assetNumber: string;
+  assetName: string;
+  category: string;
+  warehouse: string | null;
+  warehouseName: string | null;
+  storageBin: string | null;
+  storageBinCode?: string;
+  stock: number;
+  price?: number;
+  supplierName?: string | null;
+  updatedAt?: string;
+}
 
-// Compute donut SVG path (simple 2-segment donut)
+const analytics = ref<AnalyticsResponse | null>(null);
+
+// Derived summary values
+const totalAsset = computed(() => analytics.value?.totalAsset ?? 0);
+const totalStock = computed(() => analytics.value?.totalStock ?? 0);
+const lowStockCount = computed(() => {
+  const detail = analytics.value?.detail;
+  if (!Array.isArray(detail)) return 0;
+  return detail.filter((d) => d.stock > 0 && d.stock <= 5).length;
+});
+
+// Donut chart
+const CHART_COLORS = ["#3B6FE8", "#34C98A", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4"];
+
+const kategoriData = computed(() => {
+  const perCat = analytics.value?.perCategory;
+  if (!perCat) return [];
+
+  let entries: Array<[string, number]> = [];
+
+  // Handle array format from backend
+  if (Array.isArray(perCat)) {
+    entries = perCat.map((item: any) => [item.category, item.totalStock]);
+  } else if (typeof perCat === "object") {
+    // Handle object format
+    entries = Object.entries(perCat);
+  }
+
+  const total = entries.reduce((a: number, [_, b]) => a + Number(b), 0) || 1;
+  return entries.map(([label, count], i) => ({
+    label,
+    value: Math.round((Number(count) / total) * 100),
+    color: CHART_COLORS[i % CHART_COLORS.length],
+  }));
+});
+
+const totalKategori = computed(() => {
+  const perCat = analytics.value?.perCategory;
+  if (!perCat) return 0;
+  if (Array.isArray(perCat)) {
+    return perCat.length;
+  }
+  return Object.keys(perCat).length;
+});
+
 const donutSegments = computed(() => {
-  const cx = 80, cy = 80, r = 60, strokeW = 20;
+  const cx = 80, cy = 80, r = 60;
   const circumference = 2 * Math.PI * r;
   let offset = 0;
   return kategoriData.value.map((k) => {
@@ -65,48 +141,194 @@ const donutSegments = computed(() => {
   });
 });
 
-// ── Detail Table Data ─────────────────────────────────────────
-const detailStok = ref([
-  { assetName: "Nike Journey Run Road Shoes - Black", warehouse: "Gudang Jogja", storageBin: "WH_01_001", category: "Footwear", totalStock: 120, stockLevel: "normal", lastUpdated: "13-04-2026 07:00" },
-  { assetName: "Adidas Ultraboost 22 - White", warehouse: "Gudang Jogja", storageBin: "WH_01_002", category: "Footwear", totalStock: 85, stockLevel: "normal", lastUpdated: "13-04-2026 09:15" },
-  { assetName: "Puma Velocity Run - Blue", warehouse: "Gudang Bandung", storageBin: "WH_02_014", category: "Footwear", totalStock: 12, stockLevel: "low", lastUpdated: "14-04-2026 11:00" },
-  { assetName: "Reebok Nano X - Grey", warehouse: "Gudang Bandung", storageBin: "WH_02_014", category: "Footwear", totalStock: 55, stockLevel: "normal", lastUpdated: "14-04-2026 13:30" },
-  { assetName: "Nike Dri-FIT Shirt - Black", warehouse: "Gudang Jogja", storageBin: "WH_01_001", category: "Apparel", totalStock: 8, stockLevel: "low", lastUpdated: "15-04-2026 08:45" },
-]);
+// ── Stock Report (Detail Table + Bar Chart) ───────────────────
+interface StockItem {
+  assetNumber: string;
+  assetName: string;
+  category: string;
+  warehouseName: string | null;
+  storageBin: string | null;
+  stock: number;
+  price?: number;
+  supplierName?: string | null;
+  updatedAt?: string;
+}
 
-// ── Filtered Table ────────────────────────────────────────────
-const filteredDetail = computed(() => {
-  return detailStok.value.filter((row) => {
-    const matchWH = !selectedWarehouse.value || row.warehouse === selectedWarehouse.value;
-    const matchBin = !selectedStorageBin.value || row.storageBin === selectedStorageBin.value;
-    return matchWH && matchBin;
-  });
+const stockData = ref<StockItem[]>([]);
+
+// Bar chart: top assets by stock
+const stockPerAsset = computed(() => {
+  const sorted = [...stockData.value]
+    .filter((s) => s.stock > 0)
+    .sort((a, b) => b.stock - a.stock)
+    .slice(0, 6);
+  const max = sorted[0]?.stock || 1;
+  return sorted.map((s) => ({ name: s.assetName, stock: s.stock, max }));
 });
 
-function applyFilter() {
-  // In real implementation: call API with filter params
-  // filteredDetail is already reactive via computed
+// Filtered detail table (client-side for storageBin filter)
+const filteredDetail = computed(() => {
+  console.log("Filtering detail - stockData:", stockData.value);
+  console.log("selectedStorageBin:", selectedStorageBin.value);
+
+  const filtered = stockData.value.filter((row) => {
+    // If "all" selected or no bin selected, show all
+    if (!selectedStorageBin.value || selectedStorageBin.value === "all") {
+      return true;
+    }
+    // Otherwise filter by storageBin
+    return row.storageBin === selectedStorageBin.value;
+  });
+
+  console.log("Filtered detail result:", filtered);
+  return filtered;
+});
+
+function stockLevel(stock: number): "low" | "normal" | "empty" {
+  if (stock === 0) return "empty";
+  if (stock <= 5) return "low";
+  return "normal";
 }
 
-function exportExcel() {
-  // Siapkan data dari tabel
-  const rows = filteredDetail.value.map((row) => ({
-    "Asset Name": row.assetName,
-    "Warehouse": row.warehouse,
-    "Storage Bin": row.storageBin,
-    "Category": row.category,
-    "Total Stock": row.totalStock + " pcs",
-    "Last Updated": row.lastUpdated,
-  }));
-
-  // Buat worksheet & workbook
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Stock Overview");
-
-  // Download file
-  XLSX.writeFile(wb, `Analytics_Stock_${selectedPeriode.value}.xlsx`);
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString("id-ID", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
+
+// ── Fetch All Data ────────────────────────────────────────────
+const fetchAnalytics = async () => {
+  isLoading.value = true;
+  error.value = null;
+  try {
+    let url = "/reports/analytics";
+    const params = new URLSearchParams();
+    if (selectedWarehouse.value && selectedWarehouse.value !== "all") {
+      params.set("warehouseId", selectedWarehouse.value);
+    }
+    if (params.toString()) url += `?${params}`;
+
+    console.log("Fetching analytics from:", url);
+    const response = await api.get(url);
+    console.log("Analytics response full:", response);
+    console.log("Analytics response.data:", response.data);
+
+    // Handle both response formats
+    let data = null;
+    if (response.data?.data && typeof response.data.data === "object") {
+      // Format: {success, message, data: {...}}
+      data = response.data.data;
+    } else if (typeof response.data === "object" && response.data?.totalAsset !== undefined) {
+      // Already the data object
+      data = response.data;
+    } else {
+      // Fallback
+      data = response.data;
+    }
+
+    analytics.value = data;
+    console.log("Analytics state updated:", analytics.value);
+  } catch (e: any) {
+    console.error("Fetch analytics error:", e);
+    error.value = e?.response?.data?.message ?? "Gagal memuat data analytics.";
+    toast.error(error.value);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const fetchStock = async () => {
+  isLoadingStock.value = true;
+  try {
+    let url = "/reports/stock";
+    const params = new URLSearchParams();
+    if (selectedWarehouse.value && selectedWarehouse.value !== "all") {
+      params.set("warehouseId", selectedWarehouse.value);
+    }
+    if (selectedStorageBin.value && selectedStorageBin.value !== "all") {
+      params.set("storageBinId", selectedStorageBin.value);
+    }
+    if (params.toString()) url += `?${params}`;
+
+    console.log("Fetching stock from:", url);
+    const response = await api.get(url);
+    console.log("Stock response full:", response);
+    console.log("Stock response.data:", response.data);
+    console.log("Stock response.data.data:", response.data?.data);
+
+    // Handle both response formats
+    let raw = [];
+    if (response.data?.data && Array.isArray(response.data.data)) {
+      // Format: {success, message, data: [...]}
+      raw = response.data.data;
+    } else if (Array.isArray(response.data)) {
+      // Format: direct array
+      raw = response.data;
+    } else {
+      // Fallback
+      raw = [];
+    }
+
+    stockData.value = raw;
+    console.log("Final stock data:", stockData.value);
+    console.log("Stock data length:", stockData.value.length);
+  } catch (e) {
+    console.error("Fetch stock error:", e);
+    stockData.value = [];
+    toast.error("Gagal memuat data stock");
+  } finally {
+    isLoadingStock.value = false;
+  }
+};
+
+const applyFilter = async () => {
+  await Promise.all([fetchAnalytics(), fetchStock()]);
+};
+
+// ── Export Excel (dari BE) ────────────────────────────────────
+const isExporting = ref(false);
+
+const exportExcel = async () => {
+  isExporting.value = true;
+  try {
+    const response = await api.get("/reports/export/excel", {
+      responseType: "blob",
+    });
+    const blob = response.data;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `WMS_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Excel berhasil didownload");
+  } catch (e) {
+    console.error("Export error:", e);
+    toast.error("Export Excel gagal. Coba lagi.");
+  } finally {
+    isExporting.value = false;
+  }
+};
+
+// ── Init ──────────────────────────────────────────────────────
+onMounted(async () => {
+  try {
+    console.log("AnalyticsPage mounted - starting data fetch");
+    await fetchWarehouses();
+    console.log("Warehouses fetched");
+    await fetchStorageBins();
+    console.log("Storage bins fetched");
+    await applyFilter();
+    console.log("Filter applied - data should be loaded");
+  } catch (e) {
+    console.error("Error on mount:", e);
+    toast.error("Error loading analytics page");
+  }
+});
 </script>
 
 <template>
@@ -119,37 +341,40 @@ function exportExcel() {
           <h1 class="text-2xl font-bold text-gray-900">Analytics - Stock Overview</h1>
         </div>
 
+        <!-- ── Error Banner ── -->
+        <div v-if="error" class="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
+          {{ error }}
+        </div>
+
         <!-- ── Filter Bar ── -->
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 flex items-end gap-4 w-full">
-            <div class="flex flex-col gap-1.5 flex-1">
-                <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Warehouse</label>
-                <BaseSelect v-model="selectedWarehouse" :items="warehouseOptions" placeholder="Semua Warehouse" />
-            </div>
+          <div class="flex flex-col gap-1.5 flex-1">
+            <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Warehouse</label>
+            <BaseSelect v-model="selectedWarehouse" :items="warehouseOptions" placeholder="Semua Warehouse" />
+          </div>
 
-            <div class="flex flex-col gap-1.5 flex-1">
-                <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Storage Bin</label>
-                <BaseSelect v-model="selectedStorageBin" :items="storageBinOptions" placeholder="Semua Storage Bin" />
-            </div>
+          <div class="flex flex-col gap-1.5 flex-1">
+            <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Storage Bin</label>
+            <BaseSelect v-model="selectedStorageBin" :items="storageBinOptions" placeholder="Semua Storage Bin" />
+          </div>
 
-            <div class="flex flex-col gap-1.5 flex-1">
-                <label class="text-xs font-bold text-gray-400 tracking-wider uppercase">Periode</label>
-                <BaseSelect v-model="selectedPeriode" :items="periodeOptions" placeholder="Pilih Periode" />
-            </div>
-
-            <div class="pb-0.5 flex-shrink-0">
-                <BaseButton color="brand" @click="applyFilter">
-                <span class="px-1 py-0.5">Terapkan Filter</span>
-                </BaseButton>
-            </div>
+          <div class="pb-0.5 flex-shrink-0">
+            <BaseButton color="brand" :disabled="isLoading" @click="applyFilter">
+              <span class="px-1 py-0.5">
+                {{ isLoading ? "Memuat..." : "Terapkan Filter" }}
+              </span>
+            </BaseButton>
+          </div>
         </div>
+
         <!-- ── Summary Cards ── -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- Total Asset Unique -->
           <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
             <p class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-3">Total Asset Unique</p>
             <div class="flex items-end gap-2">
-              <span class="text-3xl font-extrabold text-gray-900">1.250</span>
-              <span class="mb-1 text-xs font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">+12%</span>
+              <span v-if="isLoading" class="text-3xl font-extrabold text-gray-300 animate-pulse">—</span>
+              <span v-else class="text-3xl font-extrabold text-gray-900">{{ totalAsset.toLocaleString("id-ID") }}</span>
             </div>
           </div>
 
@@ -157,19 +382,19 @@ function exportExcel() {
           <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
             <p class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-3">Total Quantity Stok</p>
             <div class="flex items-end gap-2">
-              <span class="text-3xl font-extrabold text-gray-900">12.500</span>
+              <span v-if="isLoading" class="text-3xl font-extrabold text-gray-300 animate-pulse">—</span>
+              <span v-else class="text-3xl font-extrabold text-gray-900">{{ totalStock.toLocaleString("id-ID") }}</span>
               <span class="mb-1 text-xs font-semibold text-gray-400">pcs</span>
             </div>
           </div>
 
-          <!-- Kapasitas Gudang -->
+          <!-- Total Kategori -->
           <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
-            <p class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-3">Kapasitas Gudang</p>
-            <div class="flex items-end gap-2 mb-3">
-              <span class="text-3xl font-extrabold text-gray-900">85%</span>
-            </div>
-            <div class="w-full bg-gray-100 rounded-full h-2">
-              <div class="h-2 rounded-full bg-gradient-to-r from-orange-400 to-orange-500" style="width: 85%"></div>
+            <p class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-3">Total Kategori</p>
+            <div class="flex items-end gap-2">
+              <span v-if="isLoading" class="text-3xl font-extrabold text-gray-300 animate-pulse">—</span>
+              <span v-else class="text-3xl font-extrabold text-gray-900">{{ totalKategori }}</span>
+              <span class="mb-1 text-xs font-semibold text-gray-400">kategori</span>
             </div>
           </div>
 
@@ -177,7 +402,8 @@ function exportExcel() {
           <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
             <p class="text-xs font-bold text-gray-400 tracking-wider uppercase mb-3">Low Stock Alert</p>
             <div class="flex items-end gap-2">
-              <span class="text-3xl font-extrabold text-red-500">12</span>
+              <span v-if="isLoading" class="text-3xl font-extrabold text-gray-300 animate-pulse">—</span>
+              <span v-else class="text-3xl font-extrabold text-red-500">{{ lowStockCount }}</span>
               <span class="mb-1 text-xs font-semibold text-red-400">Items</span>
             </div>
           </div>
@@ -192,11 +418,26 @@ function exportExcel() {
               <h2 class="text-sm font-bold text-gray-900">Stok per Asset</h2>
               <span class="text-xs text-gray-400">Jumlah stock untuk semua asset (pcs)</span>
             </div>
-            <div class="space-y-4">
+
+            <!-- Loading skeleton -->
+            <div v-if="isLoadingStock" class="space-y-4">
+              <div v-for="i in 4" :key="i" class="space-y-1.5">
+                <div class="h-3 bg-gray-100 rounded animate-pulse w-2/3"></div>
+                <div class="w-full bg-gray-100 rounded-full h-3 animate-pulse"></div>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div v-else-if="stockPerAsset.length === 0" class="flex items-center justify-center h-32 text-gray-400 text-xs">
+              Tidak ada data stok.
+            </div>
+
+            <!-- Chart -->
+            <div v-else class="space-y-4">
               <div v-for="item in stockPerAsset" :key="item.name" class="space-y-1.5">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="font-semibold text-gray-700">{{ item.name }}</span>
-                  <span class="font-bold text-gray-500">{{ item.stock.toLocaleString() }} pcs</span>
+                  <span class="font-semibold text-gray-700 truncate max-w-[70%]">{{ item.name }}</span>
+                  <span class="font-bold text-gray-500">{{ item.stock.toLocaleString("id-ID") }} pcs</span>
                 </div>
                 <div class="w-full bg-gray-100 rounded-full h-3">
                   <div
@@ -213,7 +454,11 @@ function exportExcel() {
             <h2 class="text-sm font-bold text-gray-900 mb-5">Distribusi Kategori</h2>
             <div class="flex-1 flex items-center justify-center">
               <div class="relative w-40 h-40">
-                <svg viewBox="0 0 160 160" class="w-40 h-40 -rotate-90">
+                <!-- Loading state -->
+                <svg v-if="isLoading" viewBox="0 0 160 160" class="w-40 h-40 -rotate-90">
+                  <circle cx="80" cy="80" r="60" fill="none" stroke="#f3f4f6" stroke-width="20" />
+                </svg>
+                <svg v-else viewBox="0 0 160 160" class="w-40 h-40 -rotate-90">
                   <circle cx="80" cy="80" r="60" fill="none" stroke="#f3f4f6" stroke-width="20" />
                   <circle
                     v-for="seg in donutSegments"
@@ -228,19 +473,26 @@ function exportExcel() {
                   />
                 </svg>
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
-                  <span class="text-2xl font-extrabold text-gray-900">5</span>
+                  <span class="text-2xl font-extrabold text-gray-900">{{ totalKategori }}</span>
                   <span class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Kategori</span>
                 </div>
               </div>
             </div>
             <div class="mt-4 space-y-2">
-              <div v-for="k in kategoriData" :key="k.label" class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: k.color }"></span>
-                  <span class="font-semibold text-gray-600">{{ k.label }}</span>
+              <!-- Loading skeleton -->
+              <template v-if="isLoading">
+                <div v-for="i in 2" :key="i" class="h-3 bg-gray-100 rounded animate-pulse"></div>
+              </template>
+              <!-- Kategori legend -->
+              <template v-else>
+                <div v-for="k in kategoriData" :key="k.label" class="flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: k.color }"></span>
+                    <span class="font-semibold text-gray-600">{{ k.label }}</span>
+                  </div>
+                  <span class="font-bold text-gray-500">{{ k.value }}%</span>
                 </div>
-                <span class="font-bold text-gray-500">{{ k.value }}%</span>
-              </div>
+              </template>
             </div>
           </div>
         </div>
@@ -251,10 +503,11 @@ function exportExcel() {
             <h2 class="text-sm font-bold text-gray-900">Data Detail Stok</h2>
             <button
               @click="exportExcel"
-              class="flex items-center gap-1.5 text-xs font-bold text-[#004AC6] hover:text-[#0038a0] transition"
+              :disabled="isExporting"
+              class="flex items-center gap-1.5 text-xs font-bold text-[#004AC6] hover:text-[#0038a0] transition disabled:opacity-50"
             >
               <i class="fas fa-file-excel text-sm"></i>
-              Export Excel
+              {{ isExporting ? "Mengunduh..." : "Export Excel" }}
             </button>
           </div>
 
@@ -271,36 +524,54 @@ function exportExcel() {
                 </tr>
               </thead>
               <tbody class="text-xs font-medium text-gray-600">
-                <tr
-                  v-for="(row, index) in filteredDetail"
-                  :key="index"
-                  class="border-t border-gray-100 hover:bg-gray-50/50 transition"
-                >
-                  <td class="px-4 py-4 font-semibold text-gray-800 max-w-xs truncate">{{ row.assetName }}</td>
-                  <td class="px-4 py-4 text-gray-500">{{ row.warehouse }}</td>
-                  <td class="px-4 py-4 font-mono text-gray-400">{{ row.storageBin }}</td>
-                  <td class="px-4 py-4 text-gray-500">{{ row.category }}</td>
-                  <td class="px-4 py-4 text-right">
-                    <span
-                      :class="[
-                        'px-2.5 py-1 rounded-md text-[10px] font-bold',
-                        row.stockLevel === 'low'
-                          ? 'bg-red-50 text-red-500'
-                          : 'bg-emerald-50 text-emerald-600',
-                      ]"
-                    >
-                      {{ row.totalStock }} pcs
-                    </span>
-                  </td>
-                  <td class="px-5 py-4 text-right text-gray-400">{{ row.lastUpdated }}</td>
-                </tr>
 
-                <!-- Empty state -->
-                <tr v-if="filteredDetail.length === 0">
-                  <td colspan="6" class="px-4 py-10 text-center text-gray-400 text-xs">
-                    Tidak ada data untuk filter yang dipilih.
-                  </td>
-                </tr>
+                <!-- Loading skeleton rows -->
+                <template v-if="isLoadingStock">
+                  <tr v-for="i in 4" :key="i" class="border-t border-gray-100">
+                    <td class="px-4 py-4"><div class="h-3 bg-gray-100 rounded animate-pulse w-48"></div></td>
+                    <td class="px-4 py-4"><div class="h-3 bg-gray-100 rounded animate-pulse w-24"></div></td>
+                    <td class="px-4 py-4"><div class="h-3 bg-gray-100 rounded animate-pulse w-20"></div></td>
+                    <td class="px-4 py-4"><div class="h-3 bg-gray-100 rounded animate-pulse w-20"></div></td>
+                    <td class="px-4 py-4 text-right"><div class="h-3 bg-gray-100 rounded animate-pulse w-16 ml-auto"></div></td>
+                    <td class="px-5 py-4 text-right"><div class="h-3 bg-gray-100 rounded animate-pulse w-28 ml-auto"></div></td>
+                  </tr>
+                </template>
+
+                <!-- Data rows -->
+                <template v-else>
+                  <tr
+                    v-for="(row, index) in filteredDetail"
+                    :key="index"
+                    class="border-t border-gray-100 hover:bg-gray-50/50 transition"
+                  >
+                    <td class="px-4 py-4 font-semibold text-gray-800 max-w-xs truncate">{{ row.assetName }}</td>
+                    <td class="px-4 py-4 text-gray-500">{{ row.warehouseName ?? "-" }}</td>
+                    <td class="px-4 py-4 font-mono text-gray-400">{{ row.storageBin ?? "-" }}</td>
+                    <td class="px-4 py-4 text-gray-500">{{ row.category ?? "-" }}</td>
+                    <td class="px-4 py-4 text-right">
+                      <span
+                        :class="[
+                          'px-2.5 py-1 rounded-md text-[10px] font-bold',
+                          row.stock === 0
+                            ? 'bg-gray-100 text-gray-400'
+                            : row.stock <= 5
+                            ? 'bg-red-50 text-red-500'
+                            : 'bg-emerald-50 text-emerald-600',
+                        ]"
+                      >
+                        {{ row.stock }} pcs
+                      </span>
+                    </td>
+                    <td class="px-5 py-4 text-right text-gray-400">{{ formatDate(row.updatedAt) }}</td>
+                  </tr>
+
+                  <!-- Empty state -->
+                  <tr v-if="filteredDetail.length === 0">
+                    <td colspan="6" class="px-4 py-10 text-center text-gray-400 text-xs">
+                      Tidak ada data untuk filter yang dipilih.
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
