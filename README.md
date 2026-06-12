@@ -59,3 +59,10 @@ npm install
 npm run dev
 ```
 
+### 4. Login
+
+```bash
+  "email": "admin@wms.com",
+  "password": "Admin123!"
+```
+
