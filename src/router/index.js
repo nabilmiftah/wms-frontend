@@ -8,6 +8,12 @@ import SupplierPage from "../pages/SupplierPage.vue";
 import UserPage from "../pages/UserPage.vue";
 import AssetPage from "../pages/AssetPage.vue";
 import StorageBinPage from "../pages/StorageBinPage.vue";
+import WorkOrderPage from "../pages/WorkOrderPage.vue";
+import CreateWorkOrder from "../pages/CreateWorkOrder.vue";
+import WorkOrderDetailInbound from "../pages/WorkOrderDetailInbound.vue";
+import WorkOrderDetailOutbound from "../pages/WorkOrderDetailOutbound.vue";
+import ReportPage from "../pages/ReportPage.vue";
+import AnalyticsPage from "../pages/AnalyticsPage.vue";
 
 const routes = [
   {
@@ -46,6 +52,32 @@ const routes = [
     path: "/storageBin",
     component: StorageBinPage,
   },
+  {
+    path: "/work-order",
+    component: WorkOrderPage,
+  },
+  {
+    path: "/work-order/create",
+    component: CreateWorkOrder,
+    props: (route) => ({ type: route.query.type }),
+  },
+  {
+    path: "/work-order/:id/inbound",
+    component: WorkOrderDetailInbound,
+  },
+  {
+    path: "/work-order/:id/outbound",
+    component: WorkOrderDetailOutbound,
+  },
+  { 
+    path: "/report",
+    component: ReportPage,
+  },
+  {
+    path: "/analytics",
+    component: AnalyticsPage,
+  },
+
 ];
 
 const router = createRouter({

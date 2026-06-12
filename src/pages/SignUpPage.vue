@@ -123,19 +123,6 @@ const handleRegister = async () => {
         {{ loading ? "Loading..." : "Register" }}
       </button>
 
-      <div class="flex items-center my-4 text-blue-600 text-xs font-bold italic">
-        <hr class="flex-grow border-slate-100" />
-        <span class="px-4 uppercase">Or</span>
-        <hr class="flex-grow border-slate-100" />
-      </div>
-
-      <button
-        type="button"
-        class="w-full border border-slate-200 py-3 rounded-xl flex items-center justify-center gap-3 font-bold text-slate-700 hover:bg-slate-50 transition"
-      >
-        <img src="/icon-google.png" class="w-5" alt="Google" /> Google
-      </button>
-
       <p class="text-center text-[11px] mt-6 text-slate-500">
         Do you have an account?
         <router-link to="/signin" class="text-blue-600 font-bold underline">
