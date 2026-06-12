@@ -21,17 +21,6 @@ import AuthLayout from './AuthLayout.vue';
       >
         Sign Up
       </router-link>
-
-      <div class="flex items-center py-4 text-blue-600 text-xs font-bold italic">
-        <hr class="flex-grow border-slate-100" /> 
-        <span class="px-4 uppercase">Or</span> 
-        <hr class="flex-grow border-slate-100" />
-      </div>
-
-      <button class="w-full border border-slate-200 py-3 rounded-xl flex items-center justify-center gap-3 font-bold text-slate-700 hover:bg-slate-50">
-        <img src="/icon-google.png" class="w-5" alt="Google" /> 
-        Google
-      </button>
     </div>
   </AuthLayout>
 </template>
