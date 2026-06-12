@@ -88,20 +88,6 @@ const handleLogin = async () => {
         {{ loading ? "Loading..." : "Login" }}
       </button>
 
-      <div
-        class="flex items-center my-6 text-blue-600 text-xs font-bold italic"
-      >
-        <hr class="flex-grow border-slate-100" />
-        <span class="px-4 uppercase">Or</span>
-        <hr class="flex-grow border-slate-100" />
-      </div>
-
-      <button
-        class="w-full border border-slate-200 py-3 rounded-xl flex items-center justify-center gap-3 font-bold text-slate-700"
-      >
-        <img src="/icon-google.png" class="w-5" /> Google
-      </button>
-
       <p class="text-center text-xs mt-6 text-slate-500">
         Don't have an account?
         <router-link to="/signup" class="text-blue-600 font-bold underline"

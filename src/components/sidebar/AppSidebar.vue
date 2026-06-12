@@ -7,6 +7,9 @@ import {
   Users,
   Factory,
   Menu,
+  ClipboardList,
+  FileText,
+  ChartColumn,
 } from "lucide-vue-next";
 
 import { useRoute } from "vue-router";
@@ -166,7 +169,7 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
         ]"
         class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
       >
-        <Users class="w-5 h-5 shrink-0" />
+        <ClipboardList class="w-5 h-5 shrink-0" />
 
         <span v-if="!isCollapsed"> Work Order </span>
       </RouterLink>
@@ -183,7 +186,7 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
         ]"
         class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
       >
-        <Users class="w-5 h-5 shrink-0" />
+        <FileText class="w-5 h-5 shrink-0" />
 
         <span v-if="!isCollapsed"> Report </span>
       </RouterLink>
@@ -199,7 +202,7 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
         ]"
         class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
       >
-        <Users class="w-5 h-5 shrink-0" />
+        <ChartColumn class="w-5 h-5 shrink-0" />
 
         <span v-if="!isCollapsed"> Analytics </span>
       </RouterLink>

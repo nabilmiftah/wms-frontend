@@ -21,15 +21,30 @@ export const scanOutbound = async (payload: {
   return response.data;
 };
 
-export const printLabelPdf = (workOrderId: string) => {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    console.error("Token not found");
-    return;
+export const printLabelPdf = async (workOrderId: string) => {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("Token not found");
+      return;
+    }
+
+    const baseURL = "https://wms-backend-ef8b.onrender.com/api/v1";
+    const response = await fetch(`${baseURL}/asset-labels/print/${workOrderId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to print label');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  } catch (error) {
+    console.error("Print label error:", error);
   }
-  const baseURL = "https://wms-backend-ef8b.onrender.com/api/v1";
-  window.open(
-    `${baseURL}/asset-labels/print/${workOrderId}?token=${token}`,
-    "_blank"
-  );
 };

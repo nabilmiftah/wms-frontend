@@ -178,7 +178,7 @@ onMounted(() => {
 <template>
   <MainLayout>
     <div class="flex min-h-screen bg-[#f5f7fb]">
-      <main class="flex-1 p-8 space-y-6 overflow-auto">
+      <main class="flex-1 p-8 space-y-6 overflow-y-auto">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Report Transaction</h1>
           <p class="text-sm text-gray-500 mt-1">
@@ -199,7 +199,7 @@ onMounted(() => {
                 <button
                   v-for="type in reportTypeOptions"
                   :key="type.value"
-                  @click="reportType = type.value; handleReportTypeChange()"
+                  @click="reportType = type.value as 'INBOUND' | 'OUTBOUND'; handleReportTypeChange()"
                   :class="[
                     'px-4 py-2 rounded-lg font-semibold text-sm transition',
                     reportType === type.value
@@ -262,9 +262,9 @@ onMounted(() => {
         <div
           class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 space-y-5"
         >
-          <div class="overflow-hidden rounded-xl border border-gray-200">
+          <div class="overflow-x-auto">
             <!-- INBOUND TABLE -->
-            <table v-if="reportType === 'INBOUND'" class="w-full text-sm border-collapse whitespace-nowrap">
+            <table v-if="reportType === 'INBOUND'" class="w-full text-sm border-collapse min-w-[1000px]">
               <thead
                 class="bg-gray-100 text-gray-400 text-xs font-bold tracking-wider uppercase"
               >
@@ -353,7 +353,7 @@ onMounted(() => {
             </table>
 
             <!-- OUTBOUND TABLE -->
-            <table v-else class="w-full text-sm border-collapse whitespace-nowrap">
+            <table v-else class="w-full text-sm border-collapse min-w-[1000px]">
               <thead
                 class="bg-gray-100 text-gray-400 text-xs font-bold tracking-wider uppercase"
               >
