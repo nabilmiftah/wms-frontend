@@ -11,7 +11,7 @@ import { toast } from "vue-sonner";
 // ── Loading / Error State ─────────────────────────────────────
 const isLoading = ref(false);
 const isLoadingStock = ref(false);
-const error = ref<string | null>(null);
+const error = ref("");
 
 // ── Filter State ──────────────────────────────────────────────
 const selectedWarehouse = ref("all");
@@ -24,13 +24,11 @@ const storageBinOptions = ref([{ label: "Semua Storage Bin", value: "all" }]);
 const fetchWarehouses = async () => {
   try {
     const response = await getWarehouses();
-    console.log("Raw warehouse response:", response);
     const data = Array.isArray(response) ? response : (response.data ?? []);
     warehouseOptions.value = [
       { label: "Semua Warehouse", value: "all" },
       ...data.map((w: any) => ({ label: w.whName, value: w.id })),
     ];
-    console.log("Warehouse options:", warehouseOptions.value);
   } catch (e) {
     console.error("Fetch warehouses error:", e);
   }
@@ -43,7 +41,6 @@ const fetchStorageBins = async (warehouseId?: string) => {
       url += `?warehouseId=${warehouseId}`;
     }
     const response = await api.get(url);
-    console.log("Raw storage bins response:", response);
     const data = Array.isArray(response.data)
       ? response.data
       : (response.data?.data ?? []);
@@ -54,7 +51,6 @@ const fetchStorageBins = async (warehouseId?: string) => {
         value: b.binAddress ?? b.binCode,
       })),
     ];
-    console.log("Storage bin options:", storageBinOptions.value);
   } catch (e) {
     console.error("Fetch storage bins error:", e);
   }
@@ -88,7 +84,6 @@ interface DetailItem {
   stock: number;
   price?: number;
   supplierName?: string | null;
-  updatedAt?: string;
 }
 
 const analytics = ref<AnalyticsResponse | null>(null);
@@ -166,10 +161,30 @@ interface StockItem {
   stock: number;
   price?: number;
   supplierName?: string | null;
-  updatedAt?: string;
 }
 
 const stockData = ref<StockItem[]>([]);
+
+// Map binAddress -> warehouseName untuk join manual
+const storageBinMap = ref<Record<string, string>>({});
+
+const fetchStorageBinMap = async () => {
+  try {
+    const response = await api.get("/storage-bins?limit=999");
+    const data = response.data?.data ?? response.data ?? [];
+    const map: Record<string, string> = {};
+    data.forEach((bin: any) => {
+      const address = bin.binAddress ?? bin.address;
+      const whName = bin.warehouse?.whName ?? bin.warehouse?.name ?? null;
+      if (address && whName) {
+        map[address] = whName;
+      }
+    });
+    storageBinMap.value = map;
+  } catch (e) {
+    console.error("Fetch storageBinMap error:", e);
+  }
+};
 
 // Get selected warehouse name for client-side filtering
 const selectedWarehouseName = computed(() => {
@@ -231,23 +246,11 @@ function stockLevel(stock: number): "low" | "normal" | "empty" {
   return "normal";
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 // ── Fetch All Data ────────────────────────────────────────────
 const fetchAnalytics = async () => {
   isLoading.value = true;
-  error.value = null;
+  error.value = "";
   try {
     let url = "/reports/analytics";
     const params = new URLSearchParams();
@@ -256,10 +259,7 @@ const fetchAnalytics = async () => {
     }
     if (params.toString()) url += `?${params}`;
 
-    console.log("Fetching analytics from:", url);
     const response = await api.get(url);
-    console.log("Analytics response full:", response);
-    console.log("Analytics response.data:", response.data);
 
     // Handle both response formats
     let data = null;
@@ -278,11 +278,10 @@ const fetchAnalytics = async () => {
     }
 
     analytics.value = data;
-    console.log("Analytics state updated:", analytics.value);
   } catch (e: any) {
     console.error("Fetch analytics error:", e);
     error.value = e?.response?.data?.message ?? "Gagal memuat data analytics.";
-    toast.error(error.value ?? "Gagal memuat data analytics.");
+    toast.error(error.value);
   } finally {
     isLoading.value = false;
   }
@@ -299,11 +298,7 @@ const fetchStock = async () => {
     // Storage bin filter is handled client-side to avoid API parameter mismatch
     if (params.toString()) url += `?${params}`;
 
-    console.log("Fetching stock from:", url);
     const response = await api.get(url);
-    console.log("Stock response full:", response);
-    console.log("Stock response.data:", response.data);
-    console.log("Stock response.data.data:", response.data?.data);
 
     // Handle both response formats
     let raw = [];
@@ -318,9 +313,24 @@ const fetchStock = async () => {
       raw = [];
     }
 
-    stockData.value = raw;
-    console.log("Final stock data:", stockData.value);
-    console.log("Stock data length:", stockData.value.length);
+    stockData.value = raw.map((item: any) => ({
+      assetNumber: item.assetNumber ?? item.assetId ?? "-",
+      assetName: item.assetName ?? "-",
+      category: item.category ?? "-",
+      warehouseName:
+        item.warehouseName ??
+        item.warehouse?.whName ??
+        (item.storageBin ? storageBinMap.value[item.storageBin] ?? null : null),
+      storageBin:
+        item.storageBin ??
+        item.storageBinCode ??
+        item.binAddress ??
+        item.storageBinAddress ??
+        null,
+      stock: Number(item.stock ?? item.totalStock ?? 0),
+      price: item.price,
+      supplierName: item.supplierName ?? item.supplier?.supName ?? null,
+    }));
   } catch (e) {
     console.error("Fetch stock error:", e);
     stockData.value = [];
@@ -362,13 +372,10 @@ const exportExcel = async () => {
 // ── Init ──────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    console.log("AnalyticsPage mounted - starting data fetch");
     await fetchWarehouses();
-    console.log("Warehouses fetched");
     await fetchStorageBins();
-    console.log("Storage bins fetched");
+    await fetchStorageBinMap();
     await applyFilter();
-    console.log("Filter applied - data should be loaded");
   } catch (e) {
     console.error("Error on mount:", e);
     toast.error("Error loading analytics page");
@@ -706,9 +713,6 @@ onMounted(async () => {
                   <th class="text-right px-4 py-4 font-semibold">
                     Total Stock
                   </th>
-                  <th class="text-right px-5 py-4 font-semibold">
-                    Last Updated
-                  </th>
                 </tr>
               </thead>
               <tbody class="text-xs font-medium text-gray-600">
@@ -738,11 +742,6 @@ onMounted(async () => {
                     <td class="px-4 py-4 text-right">
                       <div
                         class="h-3 bg-gray-100 rounded animate-pulse w-16 ml-auto"
-                      ></div>
-                    </td>
-                    <td class="px-5 py-4 text-right">
-                      <div
-                        class="h-3 bg-gray-100 rounded animate-pulse w-28 ml-auto"
                       ></div>
                     </td>
                   </tr>
@@ -783,16 +782,13 @@ onMounted(async () => {
                         {{ row.stock }} pcs
                       </span>
                     </td>
-                    <td class="px-5 py-4 text-right text-gray-400">
-                      {{ formatDate(row.updatedAt) }}
-                    </td>
                   </tr>
                 </template>
 
                 <!-- Empty state -->
                 <tr v-if="!isLoadingStock && filteredDetail.length === 0">
                   <td
-                    colspan="6"
+                    colspan="5"
                     class="px-4 py-10 text-center text-gray-400 text-xs"
                   >
                     Tidak ada data untuk filter yang dipilih.
