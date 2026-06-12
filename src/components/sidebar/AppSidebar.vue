@@ -10,9 +10,21 @@ import {
   ClipboardList,
   FileText,
   ChartColumn,
+  LogOut,
 } from "lucide-vue-next";
 
 import { useRoute } from "vue-router";
+import { useRouter } from "vue-router";
+
+const router = useRouter();
+
+const handleLogout = () => {
+  // 1. Hapus token session agar status login hilang
+  localStorage.removeItem("token");
+  localStorage.removeItem("user"); // Sesuaikan key-nya dengan proyekmu
+
+  router.push("/signin");
+};
 
 const route = useRoute();
 
@@ -29,7 +41,7 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
 <template>
   <aside
     :class="isCollapsed ? 'w-20' : 'w-64'"
-    class="bg-[#001233] text-white flex flex-col transition-all duration-300 overflow-hidden"
+    class="bg-[#001233] text-white flex flex-col h-screen transition-all duration-300 overflow-hidden"
   >
     <div
       class="h-16 flex items-center justify-between px-4 border-b border-white/10"
@@ -207,5 +219,18 @@ const emit = defineEmits(["toggle-sidebar", "navigate"]);
         <span v-if="!isCollapsed"> Analytics </span>
       </RouterLink>
     </nav>
+    <div class="p-4 border-t border-white/10 shrink-0 mb-2">
+      <div
+        @click="handleLogout"
+        :class="[
+          'text-white/70 hover:bg-white/10 hover:text-white cursor-pointer',
+          isCollapsed ? 'justify-center' : '',
+        ]"
+        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition"
+      >
+        <LogOut class="w-5 h-5 shrink-0" />
+        <span v-if="!isCollapsed">Logout</span>
+      </div>
+    </div>
   </aside>
 </template>

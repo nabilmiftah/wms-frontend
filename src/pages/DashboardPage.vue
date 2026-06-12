@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref } from "vue"
 import MainLayout from '../components/layouts/MainLayout.vue' 
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseTable from '../components/base/BaseTable.vue'
@@ -65,19 +65,42 @@ const donutOptions = ref({
 })
 
 // --- DATA TABEL ---
-const whHeaders = ['Warehouse', 'Location', 'Stroge Bin', 'Status']
-const whData = ref([
-  { warehouse: 'WH_01', location: 'Gudang Jogja', storage: 'Sleman', status: 'Active' },
-  { warehouse: 'WH_02', location: 'Gudang Bandung', storage: 'Cimahi', status: 'Active' },
-  { warehouse: 'WH_03', location: 'Gudang Jakarta', storage: 'Cakung', status: 'Active' },
-])
+const whHeaders = ["Warehouse", "Location", "Storage Bin", "Status"];
 
-const lowStockHeaders = ['Asset', 'Kategori', 'Stock', 'Minimum']
-const lowStockData = ref([
-  { asset: 'Nike Air', kategori: 'Small Asset', stock: '3', minimum: '10' },
-  { asset: 'Cannon', kategori: 'Medium Asset', stock: '3', minimum: '10' },
-  { asset: 'Samba', kategori: 'Large Asset', stock: '3', minimum: '5' },
-])
+const whData = [
+  {
+    Warehouse: "Gudang Jogja",
+    Location: "Yogyakarta",
+    "Storage Bin": "WH_01_001",
+    Status: "Active",
+  },
+  {
+    Warehouse: "Gudang Jakarta",
+    Location: "Jakarta Pusat",
+    "Storage Bin": "WH_02_005",
+    Status: "Active",
+  },
+];
+
+const woHeaders = ["WO Number", "Type", "Warehouse", "Status", "Qty"];
+
+const woData = [
+  {
+    "WO Number": "WO-2026-001",
+    Type: "Inbound",
+    Warehouse: "Gudang Jogja",
+    Status: "Completed",
+    Qty: "1,250 Pcs",
+  },
+  {
+    "WO Number": "WO-2026-002",
+    Type: "Outbound",
+    Warehouse: "Gudang Jakarta",
+    Status: "Processing",
+    Qty: "500 Pcs",
+  },
+];
+
 </script>
 
 <template>
@@ -150,17 +173,29 @@ const lowStockData = ref([
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-10">
-        <div v-for="title in ['Recent Warehouse', 'Recent Warehouse', 'Low Stock Alert']" :key="title" class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
+        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
           <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-slate-800 text-sm">{{ title }}</h3>
+            <h3 class="font-bold text-slate-800 text-sm">Recent Warehouse</h3>
             <button class="text-blue-600 text-[10px] font-bold hover:underline">Lihat semua</button>
           </div>
           <BaseTable 
-            :headers="title.includes('Alert') ? lowStockHeaders : whHeaders" 
-            :items="title.includes('Alert') ? lowStockData : whData" 
+            :headers="whHeaders" 
+            :items="whData" 
           />
         </div>
+
+        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-800 text-sm">Recent Work Order</h3>
+            <button class="text-blue-600 text-[10px] font-bold hover:underline">Lihat semua</button>
+          </div>
+          <BaseTable 
+            :headers="woHeaders" 
+            :items="woData" 
+          />
+        </div>
+
       </div>
 
     </div>
